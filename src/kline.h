@@ -1,23 +1,13 @@
 // Honda K-Line (single wire, 10400 baud) driver
 #pragma once
 #include <Arduino.h>
+#include "app.h"
 
 #define KLINE_RX_PIN 22
 #define KLINE_TX_PIN 27
 #define KLINE_BAUD   10400
 
-struct EcuData {
-  bool     valid = false;
-  uint16_t rpm = 0;
-  float    tpsVolt = 0;
-  float    tpsPct = 0;
-  int      ectC = 0;      // engine/coolant temp
-  int      iatC = 0;      // intake air temp
-  int      mapKpa = 0;    // manifold pressure
-  float    battV = 0;
-  int      speedKmh = 0;
-  uint32_t updatedMs = 0;
-};
+// EcuData lives in app.h
 
 enum KState { K_IDLE, K_WAKING, K_CONNECTED, K_ERROR };
 
