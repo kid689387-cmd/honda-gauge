@@ -1,6 +1,7 @@
 // All screens: drawing, live updates and touch handling.
 #include "app.h"
 #include "gfx.h"
+#include "models.h"
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
@@ -459,12 +460,15 @@ static void drawSet() {
     setRow(162, 128, 154, "กลับทิศทัช", onOff(app.set.flipTouch), C_WARN, C_ACCENT);
     setRow(4, 162, 312, "ทดสอบสีจอ", ">", C_ACCENT2, C_PURPLE);
   } else if (app.setTab == 1) {
-    setRow(4, 60, 312, "โหมดสาธิต", onOff(app.set.demo), app.set.demo ? C_WARN : C_DIM, C_WARN);
-    setRow(4, 94, 312, "TX กลับขั้ว", onOff(app.set.invTx), C_WARN, C_ACCENT);
-    text("เปิด = วงจรทรานซิสเตอร์", 10, 130, TL_DATUM, C_DIM, C_BG, F_TH);
-    text("ปิด = ชิป L9637D / บอร์ดสำเร็จ", 10, 150, TL_DATUM, C_DIM, C_BG, F_TH);
+    char m[64];
+    if (app.set.model < BIKE_COUNT) snprintf(m, sizeof(m), "%s  >", bikeModels[app.set.model].name);
+    else strcpy(m, "ยังไม่เลือก  >");
+    setRow(4, 60, 312, "รุ่นรถ", m, C_TEAL, C_TEAL);
+    setRow(4, 94, 312, "โหมดสาธิต", onOff(app.set.demo), app.set.demo ? C_WARN : C_DIM, C_WARN);
+    setRow(4, 128, 312, "TX กลับขั้ว", onOff(app.set.invTx), C_WARN, C_ACCENT);
+    text("TX เปิด = ทรานซิสเตอร์  ปิด = L9637D", 10, 164, TL_DATUM, C_DIM, C_BG, F_TH);
     snprintf(b, sizeof(b), "เฟิร์มแวร์ %s", FW_VERSION);
-    text(b, 10, 176, TL_DATUM, C_DIM, C_BG, F_TH);
+    text(b, 312, 222, MR_DATUM, C_LINE, C_BG, F_TH);
   } else {
     setRow(4, 60, 312, "อัปเดต / เปลี่ยนโลโก้ ผ่าน WiFi", ">", C_ACCENT2, C_OK);
     setRow(4, 94, 312, "โชว์โลโก้ตอนเปิดเครื่อง", onOff(app.set.showLogo), C_WARN, C_ACCENT);
@@ -482,6 +486,70 @@ void uiColorTest() {
     tft.fillRect(i * 80, 0, 80, 240, c[i]);
     text(n[i], i * 80 + 40, 120, MC_DATUM, TFT_BLACK, c[i], F_TH);
   }
+}
+
+// ================================================================ MODEL PICKER
+static const int MODEL_ROWS = 4;
+
+static int groupItems(int g, int *idx) {     // indexes of the models in group g
+  int n = 0;
+  for (int i = 0; i < BIKE_COUNT; i++) if (bikeModels[i].group == g) idx[n++] = i;
+  return n;
+}
+
+static void drawModel() {
+  tft.fillScreen(C_BG);
+  header("เลือกรุ่นรถ", C_TEAL);
+  for (int i = 0; i < GRP_COUNT; i++) {
+    bool on = app.modelGroup == i;
+    int x = 4 + i * 105;
+    tft.fillRoundRect(x, 29, 100, 26, 5, on ? C_TEAL : C_PANEL2);
+    tft.drawRoundRect(x, 29, 100, 26, 5, on ? C_ACCENT2 : C_LINE);
+    text(groupNames[i], x + 50, 42, MC_DATUM, on ? C_BG : C_TEXT, on ? C_TEAL : C_PANEL2, F_TH);
+  }
+  int idx[BIKE_COUNT];
+  int n = groupItems(app.modelGroup, idx);
+  int pages = (n + MODEL_ROWS - 1) / MODEL_ROWS;
+  if (app.modelPage >= pages) app.modelPage = pages - 1;
+  for (int r = 0; r < MODEL_ROWS; r++) {
+    int k = app.modelPage * MODEL_ROWS + r;
+    if (k >= n) break;
+    const BikeModel &m = bikeModels[idx[k]];
+    bool sel = app.set.model == idx[k];
+    int y = 58 + r * 37;
+    tft.fillRoundRect(4, y, 312, 35, 4, sel ? C_PANEL2 : C_PANEL);
+    if (sel) tft.drawRoundRect(4, y, 312, 35, 4, C_TEAL);
+    tft.fillRect(4, y + 5, 3, 25, sel ? C_TEAL : C_LINE);
+    text(m.name, 12, y + 1, TL_DATUM, sel ? C_TEAL : C_TEXT, sel ? C_PANEL2 : C_PANEL, F_TH);
+    text(m.variant, 12, y + 18, TL_DATUM, C_DIM, sel ? C_PANEL2 : C_PANEL, F_TH);
+    int pw = textWidth(m.code, F_S) + 14;
+    tft.fillRoundRect(310 - pw, y + 8, pw, 19, 9, sel ? C_TEAL : C_LINE);
+    text(m.code, 310 - pw / 2, y + 18, MC_DATUM, sel ? C_BG : C_TEXT, sel ? C_TEAL : C_LINE, F_S);
+  }
+  backButton();
+  button(112, 208, 70, 30, "ขึ้น", C_ACCENT);
+  button(186, 208, 70, 30, "ลง", C_ACCENT);
+  char p[24]; snprintf(p, sizeof(p), "%d/%d", app.modelPage + 1, pages);
+  text(p, 288, 223, MC_DATUM, C_DIM, C_BG, F_S);
+}
+
+static void touchModel(int x, int y) {
+  if (hit(x, y, 4, 208, 104, 30)) { app.screen = SCR_SET; app.needFull = true; return; }
+  for (int i = 0; i < GRP_COUNT; i++)
+    if (hit(x, y, 4 + i * 105, 29, 100, 26)) { app.modelGroup = i; app.modelPage = 0; }
+  int idx[BIKE_COUNT];
+  int n = groupItems(app.modelGroup, idx);
+  int pages = (n + MODEL_ROWS - 1) / MODEL_ROWS;
+  if (hit(x, y, 112, 208, 70, 30) && app.modelPage > 0) app.modelPage--;
+  if (hit(x, y, 186, 208, 70, 30) && app.modelPage < pages - 1) app.modelPage++;
+  for (int r = 0; r < MODEL_ROWS; r++) {
+    int k = app.modelPage * MODEL_ROWS + r;
+    if (k < n && hit(x, y, 4, 58 + r * 37, 312, 35)) {
+      app.set.model = (app.set.model == idx[k]) ? 255 : idx[k];   // tap again to clear
+      actSaveSettings();
+    }
+  }
+  app.needFull = true;
 }
 
 // ================================================================ OTA
@@ -512,6 +580,7 @@ void uiDrawFull() {
     case SCR_RAW:   drawRaw(); break;
     case SCR_SET:   drawSet(); break;
     case SCR_OTA:   drawOta(); return;
+    case SCR_MODEL: drawModel(); break;
   }
   uiUpdate();
 }
@@ -523,7 +592,7 @@ void uiUpdate() {
     case SCR_CHECK: updateCheck(); break;
     case SCR_STATS: updateStats(); break;
     case SCR_GRAPH: updateGraph(); break;
-    case SCR_MENU: case SCR_DTC: case SCR_RAW: case SCR_SET: drawStatus(); break;
+    case SCR_MENU: case SCR_DTC: case SCR_RAW: case SCR_SET: case SCR_MODEL: drawStatus(); break;
     default: break;
   }
 }
@@ -593,8 +662,16 @@ void uiTouch(int x, int y) {
         else if (hit(x, y, 162, 128, 154, 32)) app.set.flipTouch = !app.set.flipTouch;
         else if (hit(x, y, 4, 162, 312, 32)) { uiColorTest(); app.holdUntil = nowMs() + 3000; }
       } else if (app.setTab == 1) {
-        if (hit(x, y, 4, 60, 312, 32)) app.set.demo = !app.set.demo;
-        else if (hit(x, y, 4, 94, 312, 32)) { app.set.invTx = !app.set.invTx; actApplyInvTx(); }
+        if (hit(x, y, 4, 60, 312, 32)) {
+          if (app.set.model < BIKE_COUNT) {          // open the list on the chosen bike's page
+            app.modelGroup = bikeModels[app.set.model].group;
+            int n = 0; for (int i = 0; i < app.set.model; i++) if (bikeModels[i].group == app.modelGroup) n++;
+            app.modelPage = n / 4;
+          }
+          go(SCR_MODEL); return;
+        }
+        if (hit(x, y, 4, 94, 312, 32)) app.set.demo = !app.set.demo;
+        else if (hit(x, y, 4, 128, 312, 32)) { app.set.invTx = !app.set.invTx; actApplyInvTx(); }
       } else {
         if (hit(x, y, 4, 60, 312, 32)) { actSaveSettings(); go(SCR_OTA); actStartOta(); return; }
         if (hit(x, y, 4, 94, 312, 32)) app.set.showLogo = !app.set.showLogo;
@@ -603,6 +680,7 @@ void uiTouch(int x, int y) {
       actSaveSettings();
       app.needFull = true;
       break;
+    case SCR_MODEL: touchModel(x, y); break;
     case SCR_OTA:
       break;   // handled in main.cpp (restart)
   }

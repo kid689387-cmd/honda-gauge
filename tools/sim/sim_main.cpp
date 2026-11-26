@@ -56,6 +56,8 @@ int main() {
   shot(SCR_RAW, "08_raw");
   for (int t = 0; t < 3; t++) { app.setTab = t; char n[16]; snprintf(n, sizeof(n), "09_set%d", t); shot(SCR_SET, n); }
   shot(SCR_OTA, "10_ota");
+  app.set.model = 7; app.setTab = 1; shot(SCR_SET, "13_set_ecu_model");
+  for (int g = 0; g < 3; g++) { app.modelGroup = g; app.modelPage = g == 1 ? 1 : 0; char n[20]; snprintf(n, sizeof(n), "14_model%d", g); shot(SCR_MODEL, n); }
   app.set.maxRpm = 14000; e.rpm = 11250; shot(SCR_GAUGE, "11_gauge_14k"); app.set.maxRpm = 10000;
   e.valid = false; app.link = LINK_NONE; shot(SCR_GAUGE, "12_gauge_noecu");
   return 0;

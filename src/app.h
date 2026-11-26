@@ -3,7 +3,7 @@
 #include <stdint.h>
 
 #define BRAND_NAME "อู่ช่างวัตร ฟรีดอม"
-#define FW_VERSION "0.4.0"
+#define FW_VERSION "0.5.0"
 
 struct EcuData {
   bool     valid = false;
@@ -22,6 +22,7 @@ struct Settings {
   bool     showLogo = true;       // show the uploaded logo at power-on
   uint8_t  bright = 100;          // percent
   uint16_t maxRpm = 10000;
+  uint8_t  model = 255;          // index into bikeModels (models.h), 255 = not chosen
 };
 
 struct Stats {
@@ -32,7 +33,7 @@ struct Stats {
   uint32_t engineSec = 0, oilSec = 0, starts = 0;
 };
 
-enum Screen { SCR_GAUGE, SCR_MENU, SCR_ALL, SCR_CHECK, SCR_DTC, SCR_STATS, SCR_GRAPH, SCR_RAW, SCR_SET, SCR_OTA };
+enum Screen { SCR_GAUGE, SCR_MENU, SCR_ALL, SCR_CHECK, SCR_DTC, SCR_STATS, SCR_GRAPH, SCR_RAW, SCR_SET, SCR_OTA, SCR_MODEL };
 enum Link { LINK_DEMO, LINK_OK, LINK_WAKING, LINK_NONE };
 
 #define HIST_LEN 150
@@ -57,6 +58,7 @@ struct App {
   uint8_t  rawLen = 0;
   // settings tab, stats confirm
   int      setTab = 0;
+  int      modelGroup = 0, modelPage = 0;
   uint32_t resetArmedMs = 0;
   int      resetArmedWhat = 0;
   // history for the graph

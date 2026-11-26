@@ -132,7 +132,7 @@ public:
       int cx = x;
       for (uint32_t c : utf8(s)) {
         const G *g = find(c);
-        if (!g) { drawRect(cx, y, 7, chh, fgc); cx += 8; continue; }
+        if (!g) { fprintf(stderr, "MISSING GLYPH U+%04X in: %s\n", c, s); drawRect(cx, y, 7, chh, fgc); cx += 8; continue; }
         if (bgfill) fillRect(cx, y, g->adv, yAdvance, bgc);   // what the real library does
         for (int r = 0; r < g->h; r++) for (int k = 0; k < g->w; k++)
           blend(cx + g->dx + k, y + maxAscent - g->dy + r, fgc, bgc, g->bmp[r * g->w + k]);

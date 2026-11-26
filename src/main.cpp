@@ -13,6 +13,7 @@
 #include "app.h"
 #include "gfx.h"
 #include "kline.h"
+#include "models.h"
 
 #define TOUCH_CS   33
 #define TOUCH_IRQ  36
@@ -41,6 +42,7 @@ static void loadAll() {
   s.flipTouch = prefs.getBool("flipT", false);
   s.night     = prefs.getBool("night", false);
   s.showLogo  = prefs.getBool("logo", true);
+  s.model     = prefs.getUChar("model", 255);
   s.bright    = prefs.getUChar("bright", 100);
   s.maxRpm    = prefs.getUShort("maxRpm", 10000);
   Stats &t = app.stats;
@@ -64,6 +66,7 @@ void actSaveSettings() {
   prefs.putBool("flipT", s.flipTouch);
   prefs.putBool("night", s.night);
   prefs.putBool("logo", s.showLogo);
+  prefs.putUChar("model", s.model);
   prefs.putUChar("bright", s.bright);
   prefs.putUShort("maxRpm", s.maxRpm);
   prefs.end();
@@ -330,7 +333,11 @@ static void splash() {
   tft.fillCircle(160, 96, 5, C_TEXT);
   text(BRAND_NAME, 160, 166, MC_DATUM, C_TEXT, C_BG, F_THB);
   tft.drawFastHLine(70, 186, 180, C_ACCENT);
-  text("HONDA K-LINE SMART GAUGE", 160, 200, MC_DATUM, C_DIM, C_BG, F_S);
+  if (app.set.model < BIKE_COUNT) {
+    char m[64];
+    snprintf(m, sizeof(m), "%s  (%s)", bikeModels[app.set.model].name, bikeModels[app.set.model].code);
+    text(m, 160, 200, MC_DATUM, C_TEAL, C_BG, F_TH);
+  } else text("HONDA K-LINE SMART GAUGE", 160, 200, MC_DATUM, C_DIM, C_BG, F_S);
   text("v" FW_VERSION, 160, 222, MC_DATUM, C_LINE, C_BG, F_S);
 }
 
