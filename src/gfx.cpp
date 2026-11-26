@@ -30,22 +30,29 @@ static void useFont(Font f) {
   loaded = want;
 }
 
+// Glyphs are drawn without per-glyph background boxes: those boxes cut off the
+// overhang of italic letters and Thai marks. Live values (pad > 0) clear their
+// whole box first instead.
 int text(const char *s, int x, int y, uint8_t datum, uint16_t fg, uint16_t bg, Font f, int pad) {
   useFont(f);
+  if (pad > 0) {
+    int h = (f == F_GLCD) ? 16 : tft.fontHeight();
+    int x0 = x, y0 = y;
+    if (datum == TC_DATUM || datum == MC_DATUM || datum == BC_DATUM) x0 = x - pad / 2;
+    else if (datum == TR_DATUM || datum == MR_DATUM || datum == BR_DATUM) x0 = x - pad;
+    if (datum == ML_DATUM || datum == MC_DATUM || datum == MR_DATUM) y0 = y - h / 2;
+    else if (datum == BL_DATUM || datum == BC_DATUM || datum == BR_DATUM) y0 = y - h;
+    tft.fillRect(x0 - 3, y0, pad + 3, h, bg);   // italic glyphs lean a few pixels left at the bottom
+  }
   tft.setTextDatum(datum);
-  tft.setTextColor(fg, bg, true);
-  tft.setTextPadding(pad);
-  int w;
+  tft.setTextColor(fg, bg, false);
+  tft.setTextPadding(0);
   if (f == F_TH || f == F_THB) {
     std::string shaped = thaiShape(std::string(s));
-    w = tft.drawString(shaped.c_str(), x, y);
-  } else if (f == F_GLCD) {
-    w = tft.drawString(s, x, y, 2);
-  } else {
-    w = tft.drawString(s, x, y);
+    return tft.drawString(shaped.c_str(), x, y);
   }
-  tft.setTextPadding(0);
-  return w;
+  if (f == F_GLCD) return tft.drawString(s, x, y, 2);
+  return tft.drawString(s, x, y);
 }
 
 int textWidth(const char *s, Font f) {

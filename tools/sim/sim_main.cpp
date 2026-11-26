@@ -37,6 +37,10 @@ int main() {
   for (int i = 0; i < HIST_LEN; i++) { app.histRpm[i] = 1500 + (uint16_t)(3000 * (0.5 + 0.5 * sin(i / 9.0))); app.histEct[i] = 80 + i / 30; }
   app.histLen = HIST_LEN;
   shot(SCR_GAUGE, "01_gauge");
+  // live update on top of the previous frame: old digits must not remain
+  e.rpm = 1180; e.speedKmh = 7; e.ectC = 101; e.battV = 12.4f; e.tpsPct = 0; e.mapKpa = 31; e.iatC = 29;
+  uiUpdate(); save("01b_gauge_update");
+  e.rpm = 4450; e.speedKmh = 52; e.ectC = 86; e.battV = 13.8f; e.tpsPct = 38; e.mapKpa = 62; e.iatC = 34;
   shot(SCR_MENU, "02_menu");
   shot(SCR_ALL, "03_all");
   e.rpm = 1520; e.tpsPct = 0; e.mapKpa = 33; e.injMs = 2.35f; e.battV = 14.1f;

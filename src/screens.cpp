@@ -32,8 +32,16 @@ static void gaugeXY(float ang, int r, int &x, int &y) {
   y = G_CY + (int)(r * cosf(rad));
 }
 
+static void drawScaleLabel(int k) {
+  int top = app.set.maxRpm / 1000;
+  float ang = G_A0 + (float)(G_A1 - G_A0) * k / top;
+  int x, y; gaugeXY(ang, G_IR - 12, x, y);
+  char s[4]; snprintf(s, sizeof(s), "%d", k);
+  text(s, x, y, MC_DATUM, k * 1000 >= app.set.maxRpm * 0.82f ? C_BAD : C_DIM, C_BG, F_S);
+}
+
 static const int TILE_Y = 190, TILE_H = 48;
-static const char *tileName[] = {"BAT  V", "TPS  %", "MAP  kPa", "IAT  °C"};
+static const char *tileName[] = {"BAT V", "TPS %", "MAP kPa", "IAT °C"};
 
 static void drawGaugeFull() {
   tft.fillScreen(C_BG);
@@ -43,13 +51,8 @@ static void drawGaugeFull() {
   gLit = -1;
   for (int i = 0; i < G_SEG; i++) drawSeg(i, false);
   int top = app.set.maxRpm / 1000;
-  for (int k = 1; k < top; k++) {
-    float ang = G_A0 + (float)(G_A1 - G_A0) * k / top;
-    int x, y; gaugeXY(ang, G_IR - 12, x, y);
-    char s[4]; snprintf(s, sizeof(s), "%d", k);
-    text(s, x, y, MC_DATUM, k * 1000 >= app.set.maxRpm * 0.82f ? C_BAD : C_DIM, C_BG, F_S);
-  }
-  text("x1000 RPM", G_CX, G_CY + 34, MC_DATUM, C_DIM, C_BG, F_S);
+  for (int k = 1; k < top; k++) drawScaleLabel(k);
+  text("x1000 RPM", G_CX, G_CY + 37, MC_DATUM, C_DIM, C_BG, F_S);
   // speed (left) and engine temp (right)
   text("ความเร็ว", 6, 30, TL_DATUM, C_WARN, C_BG, F_TH);
   text("km/h", 6, 80, TL_DATUM, C_DIM, C_BG, F_S);
@@ -74,7 +77,9 @@ static void updateGauge() {
 
   char b[16];
   if (ok) snprintf(b, sizeof(b), "%u", e.rpm); else strcpy(b, "----");
-  text(b, G_CX, G_CY + 6, MC_DATUM, ok ? C_TEXT : C_DIM, C_BG, F_XL, 140);
+  text(b, G_CX, G_CY + 2, MC_DATUM, ok ? C_TEXT : C_DIM, C_BG, F_XL, 150);
+  drawScaleLabel(1);                                // the number's clear box
+  drawScaleLabel(app.set.maxRpm / 1000 - 1);         // touches these two marks
 
   if (ok) snprintf(b, sizeof(b), "%d", e.speedKmh); else strcpy(b, "--");
   text(b, 6, 54, TL_DATUM, C_TEXT, C_BG, F_MD, 62);

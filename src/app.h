@@ -3,7 +3,7 @@
 #include <stdint.h>
 
 #define BRAND_NAME "อู่ช่างวัตร ฟรีดอม"
-#define FW_VERSION "0.3.0"
+#define FW_VERSION "0.3.1"
 
 struct EcuData {
   bool     valid = false;
