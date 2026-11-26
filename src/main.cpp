@@ -169,11 +169,11 @@ fetch('/logo',{method:'POST',body:fd}).then(function(r){return r.text();}).then(
 document.getElementById('del').onclick=function(){fetch('/logo/delete',{method:'POST'}).then(function(r){return r.text();}).then(function(t){st.textContent=t;});};
 </script></body></html>)HTML";
 
-static File logoUpload;
+static fs::File logoUpload;
 static size_t logoBytes = 0;
 
 void actShowLogo() {
-  File f = LittleFS.open(LOGO_FILE, "r");
+  fs::File f = LittleFS.open(LOGO_FILE, "r");
   if (!f || f.size() != LOGO_BYTES) { if (f) f.close(); return; }
   static uint16_t row[320];
   tft.setSwapBytes(true);
@@ -348,7 +348,7 @@ void setup() {
   ts.setRotation(1);
   kline.begin(app.set.invTx);
   if (LittleFS.begin(true)) {
-    File f = LittleFS.open(LOGO_FILE, "r");
+    fs::File f = LittleFS.open(LOGO_FILE, "r");
     app.hasLogo = f && f.size() == LOGO_BYTES;
     if (f) f.close();
   }
