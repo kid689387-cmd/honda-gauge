@@ -32,7 +32,13 @@ static void gaugeXY(float ang, int r, int &x, int &y) {
   y = G_CY + (int)(r * cosf(rad));
 }
 
+static bool labelShown(int k) {
+  int top = app.set.maxRpm / 1000;
+  return k > 0 && k < top && (top <= 10 || k % 2 == 0);   // every other mark on long scales
+}
+
 static void drawScaleLabel(int k) {
+  if (!labelShown(k)) return;
   int top = app.set.maxRpm / 1000;
   float ang = G_A0 + (float)(G_A1 - G_A0) * k / top;
   int x, y; gaugeXY(ang, G_IR - 12, x, y);
@@ -78,8 +84,10 @@ static void updateGauge() {
   char b[16];
   if (ok) snprintf(b, sizeof(b), "%u", e.rpm); else strcpy(b, "----");
   text(b, G_CX, G_CY + 2, MC_DATUM, ok ? C_TEXT : C_DIM, C_BG, F_XL, 150);
-  drawScaleLabel(1);                                // the number's clear box
-  drawScaleLabel(app.set.maxRpm / 1000 - 1);         // touches these two marks
+  for (int k = 1; k < app.set.maxRpm / 1000; k++) {   // marks beside the number get
+    float ang = G_A0 + (float)(G_A1 - G_A0) * k / (app.set.maxRpm / 1000);  // cleared with it
+    if (ang < 125 || ang > 235) drawScaleLabel(k);
+  }
 
   if (ok) snprintf(b, sizeof(b), "%d", e.speedKmh); else strcpy(b, "--");
   text(b, 6, 54, TL_DATUM, C_TEXT, C_BG, F_MD, 62);

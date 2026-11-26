@@ -56,7 +56,12 @@ for cp in codes:
     bmp = bytes(min(255, int(v * a.boost)) for v in crop.tobytes())
     glyphs.append((cp, h, w, adv, -y0, x0, bmp))
 
-ascent, descent = font.getmetrics()
+# TFT_eSPI takes maxAscent straight from this header (it does not scan the glyphs),
+# so store the real top of the Latin/digit glyphs, not the font's design ascent.
+# Thai marks above that line still draw correctly; they just sit a little higher.
+latin = [g for g in glyphs if 0x21 <= g[0] <= 0x7E and g[1] > 0]
+ascent = max(g[4] for g in latin)
+descent = max(max(g[1] - g[4] for g in latin), 0)
 out = bytearray()
 out += struct.pack(">iiiiii", len(glyphs), 11, a.size, 0, ascent, descent)
 for cp, h, w, adv, dy, dx, _ in glyphs:

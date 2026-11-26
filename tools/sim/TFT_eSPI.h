@@ -81,13 +81,14 @@ public:
   uint16_t fgc = 0xFFFF, bgc = 0; int datum = 0, padX = 0;
   static int32_t rd(const uint8_t *p) { return (int32_t)((p[0] << 24) | (p[1] << 16) | (p[2] << 8) | p[3]); }
   void loadFont(const uint8_t *a) {
-    glyphs.clear(); int n = rd(a); maxAscent = maxDescent = 0;
+    glyphs.clear(); int n = rd(a);
+    maxAscent = rd(a + 16); maxDescent = rd(a + 20);       // same as TFT_eSPI: ascent from the header
     const uint8_t *bm = a + 24 + 28 * n;
     for (int i = 0; i < n; i++) {
       const uint8_t *m = a + 24 + 28 * i;
       G g{(uint32_t)rd(m), rd(m + 4), rd(m + 8), rd(m + 12), rd(m + 16), rd(m + 20), bm};
       bm += g.w * g.h; glyphs.push_back(g);
-      if (g.cp > 0x20 && g.cp < 0xFF && g.cp != 0xA0) { maxAscent = std::max(maxAscent, g.dy); maxDescent = std::max(maxDescent, g.h - g.dy); }
+      if ((g.cp > 0x20 && g.cp < 0xA0 && g.cp != 0x7F) || g.cp > 0xFF) maxDescent = std::max(maxDescent, g.h - g.dy);
     }
     yAdvance = maxAscent + maxDescent; fontLoaded = true;
   }
