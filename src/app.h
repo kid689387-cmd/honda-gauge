@@ -3,7 +3,7 @@
 #include <stdint.h>
 
 #define BRAND_NAME "อู่ช่างวัตร ฟรีดอม"
-#define FW_VERSION "0.3.2"
+#define FW_VERSION "0.4.0"
 
 struct EcuData {
   bool     valid = false;
@@ -19,6 +19,7 @@ struct EcuData {
 
 struct Settings {
   bool     demo = true, invTx = false, invColor = false, flipTouch = false, night = false;
+  bool     showLogo = true;       // show the uploaded logo at power-on
   uint8_t  bright = 100;          // percent
   uint16_t maxRpm = 10000;
 };
@@ -65,6 +66,7 @@ struct App {
   int      touchX = -1, touchY = -1;
   char     lastError[128] = "";
   uint32_t holdUntil = 0;     // keep a test screen up until this time
+  bool     hasLogo = false;   // a logo has been uploaded
 };
 
 extern App app;
@@ -85,4 +87,5 @@ void actApplyInvert();
 void actApplyInvTx();
 void actSaveSettings();
 void actSaveStats();
+void actShowLogo();          // draw the uploaded logo full screen
 uint32_t nowMs();

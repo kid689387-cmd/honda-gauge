@@ -9,6 +9,7 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <Update.h>
+#include <LittleFS.h>
 #include "app.h"
 #include "gfx.h"
 #include "kline.h"
@@ -39,6 +40,7 @@ static void loadAll() {
   s.invColor  = prefs.getBool("invCol", false);
   s.flipTouch = prefs.getBool("flipT", false);
   s.night     = prefs.getBool("night", false);
+  s.showLogo  = prefs.getBool("logo", true);
   s.bright    = prefs.getUChar("bright", 100);
   s.maxRpm    = prefs.getUShort("maxRpm", 10000);
   Stats &t = app.stats;
@@ -61,6 +63,7 @@ void actSaveSettings() {
   prefs.putBool("invCol", s.invColor);
   prefs.putBool("flipT", s.flipTouch);
   prefs.putBool("night", s.night);
+  prefs.putBool("logo", s.showLogo);
   prefs.putUChar("bright", s.bright);
   prefs.putUShort("maxRpm", s.maxRpm);
   prefs.end();
@@ -127,20 +130,66 @@ void actReadRaw() {
   app.rawLen = kline.lastFrameLen;
 }
 
-// ---------------------------------------------------------------- WiFi update
-static const char *otaPage =
-  "<html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width'></head>"
-  "<body style='font-family:sans-serif;background:#0b1119;color:#e8eff6;padding:16px'>"
-  "<h3>" BRAND_NAME "</h3><p>อัปเดตเฟิร์มแวร์</p>"
-  "<form method='POST' action='/update' enctype='multipart/form-data'>"
-  "<input type='file' name='fw' accept='.bin'><br><br><input type='submit' value='อัปโหลด'></form>"
-  "<p>ใช้ไฟล์ที่ลงท้ายด้วย -ota.bin (ไม่ใช่ -full.bin)</p></body></html>";
+// ---------------------------------------------------------------- WiFi update + logo
+// The logo is converted in the phone's browser (resize to 320x240, RGB565),
+// so the board only stores raw pixels: no JPG/PNG decoder needed here.
+#define LOGO_FILE  "/logo.raw"
+#define LOGO_BYTES (320 * 240 * 2)
+
+static const char otaPage[] PROGMEM = R"HTML(<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Gauge</title>
+<style>body{font-family:sans-serif;background:#0b1119;color:#e8eff6;margin:0;padding:16px}
+h2{margin:0 0 4px}section{background:#18233a;border:1px solid #425c7a;border-radius:10px;padding:14px;margin:14px 0}
+button,input[type=submit]{background:#5c92c4;color:#0b1119;border:0;border-radius:8px;padding:10px 16px;font-size:16px;margin:6px 6px 0 0}
+.red{background:#e8484e;color:#fff}canvas{width:100%;max-width:320px;border:1px solid #425c7a;border-radius:6px;display:block;margin:10px 0}
+select,input{font-size:15px;margin:6px 0}small{color:#889eb6}</style></head><body>
+<h2>)HTML" BRAND_NAME R"HTML(</h2><small>Honda K-Line smart gauge</small>
+<section><b>เปลี่ยนโลโก้ตอนเปิดเครื่อง</b><br>
+<input type="file" id="img" accept="image/*"><br>
+<select id="fit"><option value="contain">พอดีจอ (เห็นทั้งรูป)</option><option value="cover">เต็มจอ (ตัดขอบ)</option></select>
+<input type="color" id="bg" value="#0b1119"> สีพื้นหลัง
+<canvas id="cv" width="320" height="240"></canvas>
+<button id="up">บันทึกโลโก้</button><button id="del" class="red">ลบโลโก้</button>
+<p id="st"></p></section>
+<section><b>อัปเดตเฟิร์มแวร์</b><br><small>ใช้ไฟล์ที่ลงท้ายด้วย -ota.bin</small>
+<form method="POST" action="/update" enctype="multipart/form-data">
+<input type="file" name="fw" accept=".bin"><br><input type="submit" value="อัปโหลดเฟิร์มแวร์"></form></section>
+<script>
+var cv=document.getElementById('cv'),cx=cv.getContext('2d'),im=null,st=document.getElementById('st');
+function draw(){cx.fillStyle=document.getElementById('bg').value;cx.fillRect(0,0,320,240);if(!im)return;
+var f=document.getElementById('fit').value,s=f=='cover'?Math.max(320/im.width,240/im.height):Math.min(320/im.width,240/im.height);
+var w=im.width*s,h=im.height*s;cx.drawImage(im,(320-w)/2,(240-h)/2,w,h);}
+document.getElementById('img').onchange=function(e){var r=new FileReader();r.onload=function(){im=new Image();im.onload=draw;im.src=r.result;};r.readAsDataURL(e.target.files[0]);};
+document.getElementById('fit').onchange=draw;document.getElementById('bg').oninput=draw;draw();
+document.getElementById('up').onclick=function(){if(!im){st.textContent='เลือกรูปก่อน';return;}
+var d=cx.getImageData(0,0,320,240).data,b=new Uint8Array(320*240*2);
+for(var i=0,j=0;i<d.length;i+=4,j+=2){var v=((d[i]&248)<<8)|((d[i+1]&252)<<3)|(d[i+2]>>3);b[j]=v&255;b[j+1]=v>>8;}
+var fd=new FormData();fd.append('logo',new Blob([b]),'logo.raw');st.textContent='กำลังส่ง...';
+fetch('/logo',{method:'POST',body:fd}).then(function(r){return r.text();}).then(function(t){st.textContent=t;}).catch(function(){st.textContent='ส่งไม่สำเร็จ';});};
+document.getElementById('del').onclick=function(){fetch('/logo/delete',{method:'POST'}).then(function(r){return r.text();}).then(function(t){st.textContent=t;});};
+</script></body></html>)HTML";
+
+static File logoUpload;
+static size_t logoBytes = 0;
+
+void actShowLogo() {
+  File f = LittleFS.open(LOGO_FILE, "r");
+  if (!f || f.size() != LOGO_BYTES) { if (f) f.close(); return; }
+  static uint16_t row[320];
+  tft.setSwapBytes(true);
+  for (int y = 0; y < 240; y++) {
+    f.read((uint8_t *)row, sizeof(row));
+    tft.pushImage(0, y, 320, 1, row);
+  }
+  tft.setSwapBytes(false);
+  f.close();
+}
 
 void actStartOta() {
   WiFi.mode(WIFI_AP);
   WiFi.softAP("HondaGauge", "12345678");
   server = new WebServer(80);
-  server->on("/", HTTP_GET, []() { server->send(200, "text/html; charset=utf-8", otaPage); });
+  server->on("/", HTTP_GET, []() { server->send_P(200, "text/html; charset=utf-8", otaPage); });
   server->on("/update", HTTP_POST,
     []() {
       server->send(200, "text/plain; charset=utf-8", Update.hasError() ? "ไม่สำเร็จ" : "สำเร็จ กำลังรีสตาร์ต...");
@@ -153,6 +202,24 @@ void actStartOta() {
       else if (up.status == UPLOAD_FILE_WRITE) Update.write(up.buf, up.currentSize);
       else if (up.status == UPLOAD_FILE_END) Update.end(true);
     });
+  server->on("/logo", HTTP_POST,
+    []() {
+      bool ok = logoBytes == LOGO_BYTES;
+      if (ok) { LittleFS.remove(LOGO_FILE); LittleFS.rename("/logo.tmp", LOGO_FILE); app.hasLogo = true; }
+      else LittleFS.remove("/logo.tmp");
+      server->send(200, "text/plain; charset=utf-8", ok ? "บันทึกโลโก้แล้ว กด ออก บนจอเพื่อดู" : "ไฟล์ไม่ครบ ลองใหม่");
+    },
+    []() {
+      HTTPUpload &up = server->upload();
+      if (up.status == UPLOAD_FILE_START) { logoBytes = 0; logoUpload = LittleFS.open("/logo.tmp", "w"); }
+      else if (up.status == UPLOAD_FILE_WRITE && logoUpload) logoBytes += logoUpload.write(up.buf, up.currentSize);
+      else if (up.status == UPLOAD_FILE_END && logoUpload) logoUpload.close();
+    });
+  server->on("/logo/delete", HTTP_POST, []() {
+    LittleFS.remove(LOGO_FILE);
+    app.hasLogo = false;
+    server->send(200, "text/plain; charset=utf-8", "ลบโลโก้แล้ว");
+  });
   server->begin();
 }
 
@@ -280,8 +347,13 @@ void setup() {
   ts.begin(touchSpi);
   ts.setRotation(1);
   kline.begin(app.set.invTx);
-  splash();
-  delay(1500);
+  if (LittleFS.begin(true)) {
+    File f = LittleFS.open(LOGO_FILE, "r");
+    app.hasLogo = f && f.size() == LOGO_BYTES;
+    if (f) f.close();
+  }
+  if (app.hasLogo && app.set.showLogo) { actShowLogo(); delay(2500); }
+  else { splash(); delay(1500); }
   app.link = app.set.demo ? LINK_DEMO : LINK_NONE;
   app.needFull = true;
 }

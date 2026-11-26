@@ -466,10 +466,11 @@ static void drawSet() {
     snprintf(b, sizeof(b), "เฟิร์มแวร์ %s", FW_VERSION);
     text(b, 10, 176, TL_DATUM, C_DIM, C_BG, F_TH);
   } else {
-    setRow(4, 60, 312, "อัปเดตเฟิร์มแวร์ผ่าน WiFi", ">", C_ACCENT2, C_OK);
-    text("กดแล้วต่อ WiFi ชื่อ HondaGauge", 10, 100, TL_DATUM, C_DIM, C_BG, F_TH);
-    text("รหัส 12345678 แล้วเปิด 192.168.4.1", 10, 122, TL_DATUM, C_DIM, C_BG, F_TH);
-    text("ใช้ไฟล์ที่ลงท้ายด้วย -ota.bin", 10, 144, TL_DATUM, C_DIM, C_BG, F_TH);
+    setRow(4, 60, 312, "อัปเดต / เปลี่ยนโลโก้ ผ่าน WiFi", ">", C_ACCENT2, C_OK);
+    setRow(4, 94, 312, "โชว์โลโก้ตอนเปิดเครื่อง", onOff(app.set.showLogo), C_WARN, C_ACCENT);
+    setRow(4, 128, 312, "ดูโลโก้", app.hasLogo ? ">" : "ยังไม่มี", C_ACCENT2, C_PURPLE);
+    text("WiFi: HondaGauge  รหัส 12345678", 10, 166, TL_DATUM, C_DIM, C_BG, F_TH);
+    text("แล้วเปิดเว็บ 192.168.4.1", 10, 186, TL_DATUM, C_DIM, C_BG, F_TH);
   }
   backButton();
 }
@@ -493,7 +494,8 @@ static void drawOta() {
   text("รหัสผ่าน 12345678", 30, 92, TL_DATUM, C_DIM, C_PANEL, F_TH);
   text("2. เปิดเว็บ", 12, 116, TL_DATUM, C_TEXT, C_PANEL, F_TH);
   text("192.168.4.1", 120, 114, TL_DATUM, C_WARN, C_PANEL, F_M);
-  text("3. เลือกไฟล์ ...-ota.bin แล้วกดอัปโหลด", 12, 150, TL_DATUM, C_TEXT, C_PANEL, F_TH);
+  text("3. อัปเดตเฟิร์มแวร์ หรือเลือกรูปโลโก้", 12, 140, TL_DATUM, C_TEXT, C_PANEL, F_TH);
+  text("   เสร็จแล้วกด ออก เพื่อเริ่มใหม่", 12, 160, TL_DATUM, C_DIM, C_PANEL, F_TH);
   button(90, 196, 140, 38, "ออก", C_BAD);
 }
 
@@ -593,7 +595,11 @@ void uiTouch(int x, int y) {
       } else if (app.setTab == 1) {
         if (hit(x, y, 4, 60, 312, 32)) app.set.demo = !app.set.demo;
         else if (hit(x, y, 4, 94, 312, 32)) { app.set.invTx = !app.set.invTx; actApplyInvTx(); }
-      } else if (hit(x, y, 4, 60, 312, 32)) { actSaveSettings(); go(SCR_OTA); actStartOta(); return; }
+      } else {
+        if (hit(x, y, 4, 60, 312, 32)) { actSaveSettings(); go(SCR_OTA); actStartOta(); return; }
+        if (hit(x, y, 4, 94, 312, 32)) app.set.showLogo = !app.set.showLogo;
+        else if (hit(x, y, 4, 128, 312, 32) && app.hasLogo) { actShowLogo(); app.holdUntil = nowMs() + 4000; }
+      }
       actSaveSettings();
       app.needFull = true;
       break;

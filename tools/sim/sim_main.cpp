@@ -17,6 +17,7 @@ void actApplyInvert() {}
 void actApplyInvTx() {}
 void actSaveSettings() {}
 void actSaveStats() {}
+void actShowLogo() {}
 
 static void save(const char *name) {
   char p[128]; snprintf(p, sizeof(p), "%s/%s.ppm", getenv("OUT") ? getenv("OUT") : ".", name);
