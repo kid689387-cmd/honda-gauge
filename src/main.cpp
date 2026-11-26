@@ -12,7 +12,7 @@
 #include "thai_font.h"
 #include "thai_shape.h"
 
-#define FW_VERSION "0.2.2"
+#define FW_VERSION "0.2.3"
 #ifndef PANEL_NAME
 #define PANEL_NAME "?"
 #endif
@@ -40,7 +40,7 @@ enum Screen { SCR_GAUGE, SCR_DTC, SCR_RAW, SCR_SET, SCR_OTA };
 Screen screen = SCR_GAUGE;
 bool needFull = true;
 const int TAB_Y = 204, TAB_H = 36;
-const char *tabNames[] = {"เกจ", "โค้ดเสีย", "ข้อมูล", "ตั้งค่า"};
+const char *tabNames[] = {"เกจ", "โค้ดเสีย", "ข้อมูลดิบ", "ตั้งค่า"};
 
 #define C_BG     0x0841
 #define C_PANEL  0x18E3
@@ -130,11 +130,11 @@ void drawTabs() {
 
 void drawStatus() {
   const char *s; uint16_t c;
-  if (setDemo)                           { s = "โหมดสาธิต";     c = C_ACCENT; }
-  else if (kline.state() == K_CONNECTED) { s = "เชื่อม ECU แล้ว"; c = C_OK; }
-  else if (kline.state() == K_WAKING)    { s = "กำลังเชื่อม...";  c = C_ACCENT; }
+  if (setDemo)                           { s = "สาธิต";       c = C_ACCENT; }
+  else if (kline.state() == K_CONNECTED) { s = "เชื่อมแล้ว";   c = C_OK; }
+  else if (kline.state() == K_WAKING)    { s = "กำลังเชื่อม";  c = C_ACCENT; }
   else                                   { s = "ไม่พบ ECU";      c = C_BAD; }
-  tft.fillRect(0, 0, 150, 24, C_BG);
+  tft.fillRect(0, 0, 93, 24, C_BG);
   th(s, 4, 7, TL_DATUM, c, C_BG);
 }
 
@@ -150,7 +150,7 @@ void drawGaugeStatic() {
   for (int i = 0; i < 6; i++) {
     int x, y; tilePos(i, x, y);
     tft.fillRoundRect(x, y, 100, 52, 6, C_PANEL);
-    th(tileLabel[i], x + 6, y + 3, TL_DATUM, C_DIM, C_PANEL);
+    th(tileLabel[i], x + 6, y + 5, TL_DATUM, C_DIM, C_PANEL);
   }
 }
 
@@ -163,7 +163,7 @@ void drawTileValue(int i, const String &v, uint16_t col) {
 void drawGaugeValues() {
   drawStatus();
   bool ok = ecu.valid && (setDemo || millis() - ecu.updatedMs < 2000);
-  tft.fillRect(80, 24, 160, 48, C_BG);
+  tft.fillRect(94, 24, 132, 48, C_BG);
   num(ok ? String(ecu.rpm) : String("----"), 160, 24, TC_DATUM, ok ? C_TEXT : C_DIM, C_BG, 7);
   int w = ok ? constrain((int)ecu.rpm * 300 / 10000, 0, 300) : 0;
   uint16_t bc = ecu.rpm > 8500 ? C_BAD : (ecu.rpm > 6500 ? C_ACCENT : C_OK);

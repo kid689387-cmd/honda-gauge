@@ -40,4 +40,4 @@
 ## ฟอนต์ไทย
 
 ข้อความภาษาไทยบนจอใช้ฟอนต์ Loma จากโครงการ TLWG (GPL พร้อม font exception) แปลงเป็นไฟล์ `src/thai_font.h`
-(ตัวหนา 20px) ด้วย `tools/make_font.py` ส่วน `src/thai_shape.cpp` จัดตำแหน่งวรรณยุกต์ไม่ให้ซ้อนสระ
+(18px) ด้วย `tools/make_font.py` ส่วน `src/thai_shape.cpp` จัดตำแหน่งวรรณยุกต์ไม่ให้ซ้อนสระ
