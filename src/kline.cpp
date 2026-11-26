@@ -45,7 +45,7 @@ bool HondaKLine::sendFrame(const uint8_t *buf, uint8_t len) {
   while (got < len && millis() - t0 < 30 + len * 2) {
     if (Serial2.available()) { Serial2.read(); got++; }
   }
-  if (got < len) { err = "no echo (check wiring / TX invert)"; return false; }
+  if (got < len) { err = "ไม่มีสัญญาณสะท้อน (เช็กสาย/TX กลับขั้ว)"; return false; }
   return true;
 }
 
@@ -57,17 +57,17 @@ bool HondaKLine::readFrame(uint8_t *buf, uint8_t &len, uint32_t timeoutMs) {
     buf[n++] = Serial2.read();
     if (n == 2) {
       want = buf[1];
-      if (want < 3 || want > 64) { err = "bad length"; return false; }
+      if (want < 3 || want > 64) { err = "ข้อมูลยาวผิดปกติ"; return false; }
     }
     if (n >= 2 && n >= want) {
       len = n;
       memcpy(lastFrame, buf, n);
       lastFrameLen = n;
-      if (checksum(buf, n - 1) != buf[n - 1]) { err = "bad checksum"; return false; }
+      if (checksum(buf, n - 1) != buf[n - 1]) { err = "checksum ผิด"; return false; }
       return true;
     }
   }
-  err = "ECU timeout";
+  err = "ECU ไม่ตอบ";
   return false;
 }
 
@@ -112,7 +112,7 @@ bool HondaKLine::readTable(uint8_t table, uint8_t *out, uint8_t &outLen) {
   uint8_t resp[64], rlen = 0;
   if (!command(req, sizeof(req), resp, rlen)) { st = K_ERROR; return false; }
   // resp: 02 LEN 71 TABLE data... CS
-  if (rlen < 5 || resp[2] != 0x71) { err = "unexpected reply"; return false; }
+  if (rlen < 5 || resp[2] != 0x71) { err = "ECU ตอบผิดรูปแบบ"; return false; }
   outLen = rlen - 5;
   memcpy(out, resp + 4, outLen);
   return true;

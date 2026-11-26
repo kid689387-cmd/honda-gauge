@@ -1,5 +1,5 @@
 // Honda K-Line Smart Gauge - ESP32-2432S028 (CYD 2.8")
-// Screens: GAUGE / DTC / RAW / SET.  Landscape 320x240.
+// หน้าจอ: เกจ / โค้ดเสีย / ข้อมูลดิบ / ตั้งค่า   แนวนอน 320x240
 #include <Arduino.h>
 #include <SPI.h>
 #include <TFT_eSPI.h>
@@ -9,8 +9,10 @@
 #include <WebServer.h>
 #include <Update.h>
 #include "kline.h"
+#include "thai_font.h"
+#include "thai_shape.h"
 
-#define FW_VERSION "0.1.0"
+#define FW_VERSION "0.2.0"
 #ifndef PANEL_NAME
 #define PANEL_NAME "?"
 #endif
@@ -38,7 +40,7 @@ enum Screen { SCR_GAUGE, SCR_DTC, SCR_RAW, SCR_SET, SCR_OTA };
 Screen screen = SCR_GAUGE;
 bool needFull = true;
 const int TAB_Y = 204, TAB_H = 36;
-const char *tabNames[] = {"GAUGE", "DTC", "RAW", "SET"};
+const char *tabNames[] = {"เกจ", "โค้ดเสีย", "ข้อมูลดิบ", "ตั้งค่า"};
 
 #define C_BG     0x0841
 #define C_PANEL  0x18E3
@@ -60,7 +62,32 @@ uint32_t lastPoll = 0, lastConnectTry = 0;
 int failCount = 0;
 int lastTouchX = -1, lastTouchY = -1;
 
-// ---------------------------------------------------------------- helpers
+// ---------------------------------------------------------------- text helpers
+// Thai text uses the embedded smooth font; numbers use the built-in fonts.
+bool smoothOn = false;
+void useThai() { if (!smoothOn) { tft.loadFont(thaiFont); smoothOn = true; } }
+void useNum()  { if (smoothOn) { tft.unloadFont(); smoothOn = false; } }
+
+void th(const String &s, int x, int y, uint8_t datum, uint16_t fg, uint16_t bg, int pad = 0) {
+  useThai();
+  tft.setTextDatum(datum);
+  tft.setTextColor(fg, bg);
+  tft.setTextPadding(pad);
+  std::string shaped = thaiShape(std::string(s.c_str()));
+  tft.drawString(shaped.c_str(), x, y);
+  tft.setTextPadding(0);
+}
+
+void num(const String &s, int x, int y, uint8_t datum, uint16_t fg, uint16_t bg, int font, int pad = 0) {
+  useNum();
+  tft.setTextDatum(datum);
+  tft.setTextColor(fg, bg);
+  tft.setTextPadding(pad);
+  tft.drawString(s, x, y, font);
+  tft.setTextPadding(0);
+}
+
+// ---------------------------------------------------------------- settings
 void loadSettings() {
   prefs.begin("gauge", true);
   setInvTx      = prefs.getBool("invTx", false);
@@ -82,80 +109,60 @@ bool inRect(int x, int y, int rx, int ry, int rw, int rh) {
   return x >= rx && x < rx + rw && y >= ry && y < ry + rh;
 }
 
-void button(int x, int y, int w, int h, const char *label, uint16_t col) {
+void button(int x, int y, int w, int h, const String &label, uint16_t col) {
   tft.fillRoundRect(x, y, w, h, 6, C_PANEL);
   tft.drawRoundRect(x, y, w, h, 6, col);
-  tft.setTextColor(col, C_PANEL);
-  tft.setTextDatum(MC_DATUM);
-  tft.setTextPadding(0);
-  tft.drawString(label, x + w / 2, y + h / 2, 2);
+  th(label, x + w / 2, y + h / 2, MC_DATUM, col, C_PANEL);
 }
+
+const char *onOff(bool v) { return v ? "เปิด" : "ปิด"; }
 
 void drawTabs() {
   for (int i = 0; i < 4; i++) {
     int x = i * 80;
     bool on = (int)screen == i;
-    tft.fillRect(x, TAB_Y, 80, TAB_H, on ? C_ACCENT : C_PANEL);
+    uint16_t bg = on ? C_ACCENT : C_PANEL;
+    tft.fillRect(x, TAB_Y, 80, TAB_H, bg);
     tft.drawRect(x, TAB_Y, 80, TAB_H, C_LINE);
-    tft.setTextColor(on ? TFT_BLACK : C_TEXT, on ? C_ACCENT : C_PANEL);
-    tft.setTextDatum(MC_DATUM);
-    tft.setTextPadding(0);
-    tft.drawString(tabNames[i], x + 40, TAB_Y + TAB_H / 2, 2);
+    th(tabNames[i], x + 40, TAB_Y + TAB_H / 2, MC_DATUM, on ? TFT_BLACK : C_TEXT, bg);
   }
 }
 
 void drawStatus() {
   const char *s; uint16_t c;
-  if (setDemo)                          { s = "DEMO";      c = C_ACCENT; }
-  else if (kline.state() == K_CONNECTED){ s = "ECU OK";    c = C_OK; }
-  else if (kline.state() == K_WAKING)   { s = "CONNECTING";c = C_ACCENT; }
-  else                                  { s = "NO ECU";    c = C_BAD; }
-  tft.setTextDatum(TL_DATUM);
-  tft.setTextColor(c, C_BG);
-  tft.setTextPadding(90);
-  tft.drawString(s, 4, 2, 2);
-  tft.setTextPadding(0);
+  if (setDemo)                           { s = "โหมดสาธิต";     c = C_ACCENT; }
+  else if (kline.state() == K_CONNECTED) { s = "เชื่อม ECU แล้ว"; c = C_OK; }
+  else if (kline.state() == K_WAKING)    { s = "กำลังเชื่อม...";  c = C_ACCENT; }
+  else                                   { s = "ไม่พบ ECU";      c = C_BAD; }
+  tft.fillRect(0, 0, 150, 24, C_BG);
+  th(s, 4, 7, TL_DATUM, c, C_BG);
 }
 
 // ---------------------------------------------------------------- GAUGE
-const char *tileLabel[] = {"ENGINE C", "AIR C", "BATT V", "TPS %", "MAP kPa", "SPEED km/h"};
+const char *tileLabel[] = {"เครื่อง °C", "อากาศ °C", "แบต V", "คันเร่ง %", "MAP kPa", "ความเร็ว"};
 
 void tilePos(int i, int &x, int &y) { x = 6 + (i % 3) * 104; y = 96 + (i / 3) * 54; }
 
 void drawGaugeStatic() {
   tft.fillRect(0, 0, 320, TAB_Y, C_BG);
-  tft.setTextDatum(TR_DATUM);
-  tft.setTextColor(C_DIM, C_BG);
-  tft.drawString("RPM", 314, 2, 2);
+  th("รอบ/นาที", 314, 7, TR_DATUM, C_DIM, C_BG);
   tft.drawRect(9, 71, 302, 16, C_LINE);
   for (int i = 0; i < 6; i++) {
     int x, y; tilePos(i, x, y);
     tft.fillRoundRect(x, y, 100, 50, 6, C_PANEL);
-    tft.setTextDatum(TL_DATUM);
-    tft.setTextColor(C_DIM, C_PANEL);
-    tft.drawString(tileLabel[i], x + 6, y + 4, 2);
+    th(tileLabel[i], x + 6, y + 6, TL_DATUM, C_DIM, C_PANEL);
   }
 }
 
 void drawTileValue(int i, const String &v, uint16_t col) {
   int x, y; tilePos(i, x, y);
-  tft.setTextDatum(MR_DATUM);
-  tft.setTextColor(col, C_PANEL);
-  tft.setTextPadding(86);
-  tft.drawString(v, x + 94, y + 34, 4);
-  tft.setTextPadding(0);
+  num(v, x + 94, y + 36, MR_DATUM, col, C_PANEL, 4, 86);
 }
 
 void drawGaugeValues() {
   drawStatus();
   bool ok = ecu.valid && (setDemo || millis() - ecu.updatedMs < 2000);
-  // RPM number
-  tft.setTextDatum(TC_DATUM);
-  tft.setTextColor(ok ? C_TEXT : C_DIM, C_BG);
-  tft.setTextPadding(200);
-  tft.drawString(ok ? String(ecu.rpm) : String("----"), 160, 16, 7);
-  tft.setTextPadding(0);
-  // RPM bar (0-10000)
+  num(ok ? String(ecu.rpm) : String("----"), 160, 18, TC_DATUM, ok ? C_TEXT : C_DIM, C_BG, 7, 200);
   int w = ok ? constrain((int)ecu.rpm * 300 / 10000, 0, 300) : 0;
   uint16_t bc = ecu.rpm > 8500 ? C_BAD : (ecu.rpm > 6500 ? C_ACCENT : C_OK);
   tft.fillRect(10, 72, w, 14, bc);
@@ -176,23 +183,20 @@ void drawGaugeValues() {
 void drawDtc() {
   tft.fillRect(0, 0, 320, TAB_Y, C_BG);
   drawStatus();
-  button(6, 24, 98, 40, "READ", C_OK);
-  button(111, 24, 98, 40, dtcPast ? "PAST" : "CURRENT", C_TEXT);
+  button(6, 26, 98, 40, "อ่านโค้ด", C_OK);
+  button(111, 26, 98, 40, dtcPast ? "ย้อนหลัง" : "ปัจจุบัน", C_TEXT);
   bool armed = clearArmedMs && millis() - clearArmedMs < 4000;
-  button(216, 24, 98, 40, armed ? "SURE?" : "CLEAR", C_BAD);
+  button(216, 26, 98, 40, armed ? "ยืนยันลบ?" : "ลบโค้ด", C_BAD);
 
-  tft.setTextDatum(TL_DATUM);
-  tft.setTextColor(C_DIM, C_BG);
-  tft.drawString(dtcMsg, 6, 70, 2);
+  th(dtcMsg, 6, 72, TL_DATUM, C_DIM, C_BG);
 
-  tft.setTextColor(C_TEXT, C_BG);
-  if (dtcCount == -2) tft.drawString("Press READ (ignition ON)", 6, 92, 2);
-  else if (dtcCount == -1) { tft.setTextColor(C_BAD, C_BG); tft.drawString("Read failed", 6, 92, 2); }
-  else if (dtcCount == 0) { tft.setTextColor(C_OK, C_BG); tft.drawString("No fault codes", 6, 92, 4); }
+  if (dtcCount == -2)      th("กด อ่านโค้ด (เปิดสวิตช์กุญแจก่อน)", 6, 98, TL_DATUM, C_TEXT, C_BG);
+  else if (dtcCount == -1) th("อ่านไม่สำเร็จ", 6, 98, TL_DATUM, C_BAD, C_BG);
+  else if (dtcCount == 0)  th("ไม่มีโค้ดเสีย", 6, 98, TL_DATUM, C_OK, C_BG);
   else {
     for (int i = 0; i < dtcCount && i < 15; i++) {
-      int x = 6 + (i % 3) * 104, y = 92 + (i / 3) * 22;
-      tft.drawString(dtcList[i], x, y, 4);
+      int x = 6 + (i % 3) * 104, y = 98 + (i / 3) * 22;
+      num(dtcList[i], x, y, TL_DATUM, C_TEXT, C_BG, 4);
     }
   }
 }
@@ -200,21 +204,21 @@ void drawDtc() {
 void doReadDtc() {
   if (setDemo) {
     dtcCount = 2; strcpy(dtcList[0], "07-01"); strcpy(dtcList[1], "12-01");
-    dtcMsg = "Demo codes (not real)";
+    dtcMsg = "โค้ดตัวอย่าง (ไม่ใช่ของจริง)";
     return;
   }
   if (kline.state() != K_CONNECTED && !kline.connect()) {
     dtcCount = -1; dtcMsg = kline.lastError(); return;
   }
   dtcCount = kline.readDtc(dtcList, 24, dtcPast);
-  dtcMsg = dtcCount < 0 ? String(kline.lastError()) : String(dtcPast ? "Past codes" : "Current codes");
+  dtcMsg = dtcCount < 0 ? String(kline.lastError()) : String(dtcPast ? "โค้ดย้อนหลัง" : "โค้ดปัจจุบัน");
 }
 
 void doClearDtc() {
-  if (setDemo) { dtcCount = 0; dtcMsg = "Demo: cleared"; return; }
+  if (setDemo) { dtcCount = 0; dtcMsg = "สาธิต: ลบแล้ว"; return; }
   if (kline.state() != K_CONNECTED && !kline.connect()) { dtcMsg = kline.lastError(); return; }
   bool ok = kline.clearDtc();
-  dtcMsg = ok ? "Cleared. Turn key OFF/ON, read again" : String("Clear failed: ") + kline.lastError();
+  dtcMsg = ok ? String("ลบแล้ว ปิด-เปิดกุญแจ แล้วอ่านใหม่") : String("ลบไม่สำเร็จ: ") + kline.lastError();
   if (ok) dtcCount = -2;
 }
 
@@ -222,73 +226,67 @@ void doClearDtc() {
 void drawRaw() {
   tft.fillRect(0, 0, 320, TAB_Y, C_BG);
   drawStatus();
-  char t[24]; snprintf(t, sizeof(t), "TABLE 0x%02X", rawTable);
-  button(6, 24, 150, 36, t, C_TEXT);
-  button(164, 24, 150, 36, "READ", C_OK);
-  tft.setTextDatum(TL_DATUM);
-  tft.setTextColor(C_DIM, C_BG);
-  tft.drawString(rawMsg, 6, 66, 2);
-  tft.setTextColor(C_TEXT, C_BG);
+  char t[24]; snprintf(t, sizeof(t), "ตาราง 0x%02X", rawTable);
+  button(6, 26, 150, 36, t, C_TEXT);
+  button(164, 26, 150, 36, "อ่าน", C_OK);
+  th(rawMsg, 6, 66, TL_DATUM, C_DIM, C_BG);
   char line[64];
-  for (int row = 0; row * 8 < kline.lastFrameLen && row < 8; row++) {
+  for (int row = 0; row * 8 < kline.lastFrameLen && row < 7; row++) {
     int p = snprintf(line, sizeof(line), "%02X:", row * 8);
     for (int i = 0; i < 8 && row * 8 + i < kline.lastFrameLen; i++)
       p += snprintf(line + p, sizeof(line) - p, " %02X", kline.lastFrame[row * 8 + i]);
-    tft.drawString(line, 6, 86 + row * 14, 2);
+    num(line, 6, 90 + row * 15, TL_DATUM, C_TEXT, C_BG, 2);
   }
 }
 
 void doReadRaw() {
-  if (setDemo) { rawMsg = "Turn DEMO off in SET first"; return; }
+  if (setDemo) { rawMsg = "ปิดโหมดสาธิตในหน้า ตั้งค่า ก่อน"; return; }
   if (kline.state() != K_CONNECTED && !kline.connect()) { rawMsg = kline.lastError(); return; }
   uint8_t b[64], n = 0;
-  rawMsg = kline.readTable(rawTable, b, n) ? String("OK, ") + n + " data bytes" : String(kline.lastError());
+  rawMsg = kline.readTable(rawTable, b, n) ? String("สำเร็จ ") + n + " ไบต์" : String(kline.lastError());
 }
 
 // ---------------------------------------------------------------- SET
 void drawSet() {
   tft.fillRect(0, 0, 320, TAB_Y, C_BG);
   drawStatus();
-  button(6, 24, 150, 36, setDemo ? "DEMO: ON" : "DEMO: OFF", setDemo ? C_ACCENT : C_TEXT);
-  button(164, 24, 150, 36, setInvTx ? "TX INVERT: ON" : "TX INVERT: OFF", C_TEXT);
-  button(6, 66, 150, 36, setInvColor ? "COLOR INV: ON" : "COLOR INV: OFF", C_TEXT);
-  button(164, 66, 150, 36, setFlipTouch ? "TOUCH FLIP: ON" : "TOUCH FLIP: OFF", C_TEXT);
-  button(6, 108, 150, 36, "WIFI UPDATE", C_OK);
-  button(164, 108, 150, 36, "COLOR TEST", C_TEXT);
-  tft.setTextDatum(TL_DATUM);
-  tft.setTextColor(C_DIM, C_BG);
-  tft.drawString(String("FW ") + FW_VERSION + "  panel " + PANEL_NAME, 6, 152, 2);
-  tft.drawString("TX INVERT ON = transistor circuit", 6, 170, 2);
-  tft.drawString(String("touch ") + lastTouchX + "," + lastTouchY, 6, 186, 2);
+  button(6, 26, 150, 36, String("สาธิต: ") + onOff(setDemo), setDemo ? C_ACCENT : C_TEXT);
+  button(164, 26, 150, 36, String("TX กลับขั้ว: ") + onOff(setInvTx), C_TEXT);
+  button(6, 68, 150, 36, String("กลับสีจอ: ") + onOff(setInvColor), C_TEXT);
+  button(164, 68, 150, 36, String("กลับทิศทัช: ") + onOff(setFlipTouch), C_TEXT);
+  button(6, 110, 150, 36, "อัปเดตผ่าน WiFi", C_OK);
+  button(164, 110, 150, 36, "ทดสอบสี", C_TEXT);
+  th(String("เฟิร์มแวร์ ") + FW_VERSION + "  จอ " + PANEL_NAME, 6, 150, TL_DATUM, C_DIM, C_BG);
+  th("TX กลับขั้ว เปิด = วงจรทรานซิสเตอร์", 6, 168, TL_DATUM, C_DIM, C_BG);
+  th(String("ทัช ") + lastTouchX + "," + lastTouchY, 6, 186, TL_DATUM, C_DIM, C_BG);
 }
 
 void colorTest() {
   const uint16_t c[] = {TFT_RED, TFT_GREEN, TFT_BLUE, TFT_WHITE};
-  const char *n[] = {"RED", "GREEN", "BLUE", "WHITE"};
+  const char *n[] = {"แดง", "เขียว", "น้ำเงิน", "ขาว"};
   for (int i = 0; i < 4; i++) {
     tft.fillRect(i * 80, 0, 80, TAB_Y, c[i]);
-    tft.setTextColor(TFT_BLACK, c[i]);
-    tft.setTextDatum(MC_DATUM);
-    tft.drawString(n[i], i * 80 + 40, TAB_Y / 2, 2);
+    th(n[i], i * 80 + 40, TAB_Y / 2, MC_DATUM, TFT_BLACK, c[i]);
   }
 }
 
 // ---------------------------------------------------------------- WIFI OTA
 const char *otaPage =
-  "<html><head><meta name='viewport' content='width=device-width'></head><body style='font-family:sans-serif'>"
-  "<h3>Honda Gauge update</h3><form method='POST' action='/update' enctype='multipart/form-data'>"
-  "<input type='file' name='fw' accept='.bin'><br><br><input type='submit' value='Upload'></form>"
-  "<p>Use the file ending in -ota.bin (not -full.bin)</p></body></html>";
+  "<html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width'></head>"
+  "<body style='font-family:sans-serif'><h3>อัปเดตเกจ Honda</h3>"
+  "<form method='POST' action='/update' enctype='multipart/form-data'>"
+  "<input type='file' name='fw' accept='.bin'><br><br><input type='submit' value='อัปโหลด'></form>"
+  "<p>ใช้ไฟล์ที่ลงท้ายด้วย -ota.bin (ไม่ใช่ -full.bin)</p></body></html>";
 
 void startOta() {
   screen = SCR_OTA;
   WiFi.mode(WIFI_AP);
   WiFi.softAP("HondaGauge", "12345678");
   server = new WebServer(80);
-  server->on("/", HTTP_GET, []() { server->send(200, "text/html", otaPage); });
+  server->on("/", HTTP_GET, []() { server->send(200, "text/html; charset=utf-8", otaPage); });
   server->on("/update", HTTP_POST,
     []() {
-      server->send(200, "text/plain", Update.hasError() ? "FAILED" : "OK, rebooting...");
+      server->send(200, "text/plain; charset=utf-8", Update.hasError() ? "ไม่สำเร็จ" : "สำเร็จ กำลังรีสตาร์ต...");
       delay(500);
       if (!Update.hasError()) ESP.restart();
     },
@@ -300,15 +298,12 @@ void startOta() {
     });
   server->begin();
   tft.fillScreen(C_BG);
-  tft.setTextDatum(TL_DATUM);
-  tft.setTextColor(C_ACCENT, C_BG);
-  tft.drawString("WIFI UPDATE MODE", 10, 10, 4);
-  tft.setTextColor(C_TEXT, C_BG);
-  tft.drawString("1. Phone WiFi: HondaGauge", 10, 50, 2);
-  tft.drawString("   password: 12345678", 10, 70, 2);
-  tft.drawString("2. Browser: 192.168.4.1", 10, 95, 2);
-  tft.drawString("3. Upload ...-ota.bin", 10, 120, 2);
-  button(90, 170, 140, 50, "EXIT", C_BAD);
+  th("โหมดอัปเดตผ่าน WiFi", 10, 14, TL_DATUM, C_ACCENT, C_BG);
+  th("1. มือถือต่อ WiFi: HondaGauge", 10, 44, TL_DATUM, C_TEXT, C_BG);
+  th("    รหัสผ่าน: 12345678", 10, 68, TL_DATUM, C_TEXT, C_BG);
+  th("2. เปิดเว็บ 192.168.4.1", 10, 92, TL_DATUM, C_TEXT, C_BG);
+  th("3. อัปโหลดไฟล์ ...-ota.bin", 10, 116, TL_DATUM, C_TEXT, C_BG);
+  button(90, 170, 140, 50, "ออก", C_BAD);
 }
 
 // ---------------------------------------------------------------- touch
@@ -338,29 +333,29 @@ void handleTouch(int x, int y) {
   }
   switch (screen) {
     case SCR_DTC:
-      if (inRect(x, y, 6, 24, 98, 40)) { dtcMsg = "Reading..."; drawDtc(); doReadDtc(); }
-      else if (inRect(x, y, 111, 24, 98, 40)) { dtcPast = !dtcPast; dtcCount = -2; dtcMsg = ""; }
-      else if (inRect(x, y, 216, 24, 98, 40)) {
+      if (inRect(x, y, 6, 26, 98, 40)) { dtcMsg = "กำลังอ่าน..."; drawDtc(); doReadDtc(); }
+      else if (inRect(x, y, 111, 26, 98, 40)) { dtcPast = !dtcPast; dtcCount = -2; dtcMsg = ""; }
+      else if (inRect(x, y, 216, 26, 98, 40)) {
         if (clearArmedMs && millis() - clearArmedMs < 4000) { clearArmedMs = 0; doClearDtc(); }
-        else { clearArmedMs = millis(); dtcMsg = "Tap SURE? to clear codes"; }
+        else { clearArmedMs = millis(); dtcMsg = "กด ยืนยันลบ? อีกครั้งเพื่อลบโค้ด"; }
       }
       needFull = true;
       break;
     case SCR_RAW:
-      if (inRect(x, y, 6, 24, 150, 36)) {
+      if (inRect(x, y, 6, 26, 150, 36)) {
         const uint8_t tables[] = {0x10, 0x11, 0x20, 0x21, 0x60, 0x61, 0xD0, 0xD1};
         int i = 0; while (i < 8 && tables[i] != rawTable) i++;
         rawTable = tables[(i + 1) % 8];
-      } else if (inRect(x, y, 164, 24, 150, 36)) { rawMsg = "Reading..."; drawRaw(); doReadRaw(); }
+      } else if (inRect(x, y, 164, 26, 150, 36)) { rawMsg = "กำลังอ่าน..."; drawRaw(); doReadRaw(); }
       needFull = true;
       break;
     case SCR_SET:
-      if (inRect(x, y, 6, 24, 150, 36)) setDemo = !setDemo;
-      else if (inRect(x, y, 164, 24, 150, 36)) { setInvTx = !setInvTx; kline.setInvertTx(setInvTx); }
-      else if (inRect(x, y, 6, 66, 150, 36)) { setInvColor = !setInvColor; tft.invertDisplay(setInvColor); }
-      else if (inRect(x, y, 164, 66, 150, 36)) setFlipTouch = !setFlipTouch;
-      else if (inRect(x, y, 6, 108, 150, 36)) { saveSettings(); startOta(); return; }
-      else if (inRect(x, y, 164, 108, 150, 36)) { colorTest(); delay(3000); }
+      if (inRect(x, y, 6, 26, 150, 36)) setDemo = !setDemo;
+      else if (inRect(x, y, 164, 26, 150, 36)) { setInvTx = !setInvTx; kline.setInvertTx(setInvTx); }
+      else if (inRect(x, y, 6, 68, 150, 36)) { setInvColor = !setInvColor; tft.invertDisplay(setInvColor); }
+      else if (inRect(x, y, 164, 68, 150, 36)) setFlipTouch = !setFlipTouch;
+      else if (inRect(x, y, 6, 110, 150, 36)) { saveSettings(); startOta(); return; }
+      else if (inRect(x, y, 164, 110, 150, 36)) { colorTest(); delay(3000); }
       saveSettings();
       needFull = true;
       break;
@@ -416,11 +411,8 @@ void setup() {
 
   kline.begin(setInvTx);
 
-  tft.setTextDatum(MC_DATUM);
-  tft.setTextColor(C_ACCENT, C_BG);
-  tft.drawString("HONDA K-LINE GAUGE", 160, 100, 4);
-  tft.setTextColor(C_DIM, C_BG);
-  tft.drawString(String("v") + FW_VERSION + "  " + PANEL_NAME, 160, 135, 2);
+  th("สมาร์ทเกจ HONDA K-LINE", 160, 100, MC_DATUM, C_ACCENT, C_BG);
+  th(String("v") + FW_VERSION + "  " + PANEL_NAME, 160, 132, MC_DATUM, C_DIM, C_BG);
   delay(1200);
 }
 
