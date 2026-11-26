@@ -1,0 +1,51 @@
+// Honda K-Line (single wire, 10400 baud) driver
+#pragma once
+#include <Arduino.h>
+
+#define KLINE_RX_PIN 22
+#define KLINE_TX_PIN 27
+#define KLINE_BAUD   10400
+
+struct EcuData {
+  bool     valid = false;
+  uint16_t rpm = 0;
+  float    tpsVolt = 0;
+  float    tpsPct = 0;
+  int      ectC = 0;      // engine/coolant temp
+  int      iatC = 0;      // intake air temp
+  int      mapKpa = 0;    // manifold pressure
+  float    battV = 0;
+  int      speedKmh = 0;
+  uint32_t updatedMs = 0;
+};
+
+enum KState { K_IDLE, K_WAKING, K_CONNECTED, K_ERROR };
+
+class HondaKLine {
+public:
+  void begin(bool invertTx);
+  void setInvertTx(bool inv);
+  bool connect();                         // wake-up + init, true if ECU answered
+  bool readTable(uint8_t table, uint8_t *out, uint8_t &outLen); // payload after table id
+  bool readLiveData(EcuData &d);          // table 0x11
+  int  readDtc(char codes[][8], int maxCodes, bool past); // returns count, -1 on error
+  bool clearDtc();
+  KState state() const { return st; }
+  const char *lastError() const { return err; }
+
+  // last raw frame for the RAW screen
+  uint8_t lastFrame[64];
+  uint8_t lastFrameLen = 0;
+
+private:
+  bool invTx = false;
+  KState st = K_IDLE;
+  const char *err = "";
+  void setIdle();
+  void setActive();
+  void startUart();
+  bool sendFrame(const uint8_t *buf, uint8_t len);
+  bool readFrame(uint8_t *buf, uint8_t &len, uint32_t timeoutMs);
+  bool command(const uint8_t *req, uint8_t reqLen, uint8_t *resp, uint8_t &respLen);
+  static uint8_t checksum(const uint8_t *buf, uint8_t len);
+};
