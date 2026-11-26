@@ -12,7 +12,7 @@
 #include "thai_font.h"
 #include "thai_shape.h"
 
-#define FW_VERSION "0.2.1"
+#define FW_VERSION "0.2.2"
 #ifndef PANEL_NAME
 #define PANEL_NAME "?"
 #endif
@@ -40,13 +40,13 @@ enum Screen { SCR_GAUGE, SCR_DTC, SCR_RAW, SCR_SET, SCR_OTA };
 Screen screen = SCR_GAUGE;
 bool needFull = true;
 const int TAB_Y = 204, TAB_H = 36;
-const char *tabNames[] = {"เกจ", "โค้ดเสีย", "ข้อมูลดิบ", "ตั้งค่า"};
+const char *tabNames[] = {"เกจ", "โค้ดเสีย", "ข้อมูล", "ตั้งค่า"};
 
 #define C_BG     0x0841
 #define C_PANEL  0x18E3
 #define C_LINE   0x39E7
 #define C_TEXT   TFT_WHITE
-#define C_DIM    0x8410
+#define C_DIM    0xAD55
 #define C_ACCENT 0xFD20   // orange
 #define C_OK     0x07E0
 #define C_BAD    0xF800
@@ -150,13 +150,13 @@ void drawGaugeStatic() {
   for (int i = 0; i < 6; i++) {
     int x, y; tilePos(i, x, y);
     tft.fillRoundRect(x, y, 100, 52, 6, C_PANEL);
-    th(tileLabel[i], x + 6, y + 5, TL_DATUM, C_DIM, C_PANEL);
+    th(tileLabel[i], x + 6, y + 3, TL_DATUM, C_DIM, C_PANEL);
   }
 }
 
 void drawTileValue(int i, const String &v, uint16_t col) {
   int x, y; tilePos(i, x, y);
-  tft.fillRect(x + 4, y + 25, 92, 26, C_PANEL);
+  tft.fillRect(x + 4, y + 26, 92, 26, C_PANEL);
   num(v, x + 94, y + 26, TR_DATUM, col, C_PANEL, 4);
 }
 
@@ -256,10 +256,10 @@ void drawSet() {
   button(164, 26, 150, 36, String("TX กลับขั้ว: ") + onOff(setInvTx), C_TEXT);
   button(6, 68, 150, 36, String("กลับสีจอ: ") + onOff(setInvColor), C_TEXT);
   button(164, 68, 150, 36, String("กลับทิศทัช: ") + onOff(setFlipTouch), C_TEXT);
-  button(6, 110, 150, 36, "อัปเดตผ่าน WiFi", C_OK);
+  button(6, 110, 150, 36, "อัปเดต WiFi", C_OK);
   button(164, 110, 150, 36, "ทดสอบสี", C_TEXT);
   th(String("เฟิร์มแวร์ ") + FW_VERSION + "  จอ " + PANEL_NAME, 6, 150, TL_DATUM, C_DIM, C_BG);
-  th("TX กลับขั้ว เปิด = วงจรทรานซิสเตอร์", 6, 168, TL_DATUM, C_DIM, C_BG);
+  th("TX กลับขั้ว เปิด = ทรานซิสเตอร์", 6, 168, TL_DATUM, C_DIM, C_BG);
   th(String("ทัช ") + lastTouchX + "," + lastTouchY, 6, 186, TL_DATUM, C_DIM, C_BG);
 }
 

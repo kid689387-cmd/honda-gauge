@@ -2,7 +2,8 @@
 """Build a TFT_eSPI smooth font (.vlw format) with Thai + ASCII glyphs and
 write it as a C array to src/thai_font.h.
 
-Usage: python3 tools/make_font.py FONT.otf SIZE_PX
+Usage: python3 tools/make_font.py FONT.otf SIZE_PX [BOOST]
+BOOST > 1 thickens thin anti-aliased strokes for small TFT panels.
 Thai marks keep zero advance and a negative left offset, so they sit on the
 previous consonant. Private-use glyphs U+F700-F71A (lowered/shifted marks)
 are included for src/thai_shape.cpp.
@@ -13,6 +14,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 font_path = sys.argv[1]
 size = int(sys.argv[2])
+boost = float(sys.argv[3]) if len(sys.argv) > 3 else 1.0
 font = ImageFont.truetype(font_path, size, layout_engine=ImageFont.Layout.BASIC)
 
 codes = list(range(0x20, 0x7F)) + [0xB0]
@@ -32,7 +34,8 @@ for cp in codes:
     img = Image.new("L", (w + 3 * pad, h + 3 * pad), 0)
     ox, oy = pad - x0 + pad // 2, pad - y0 + pad // 2
     ImageDraw.Draw(img).text((ox, oy), ch, font=font, fill=255, anchor="ls")
-    bmp = img.crop((ox + x0, oy + y0, ox + x1, oy + y1)).tobytes()
+    crop = img.crop((ox + x0, oy + y0, ox + x1, oy + y1))
+    bmp = bytes(min(255, int(a * boost)) for a in crop.tobytes())
     glyphs.append((cp, h, w, adv, -y0, x0, bmp))
 
 ascent, descent = font.getmetrics()

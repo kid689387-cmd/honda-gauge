@@ -45,7 +45,7 @@ bool HondaKLine::sendFrame(const uint8_t *buf, uint8_t len) {
   while (got < len && millis() - t0 < 30 + len * 2) {
     if (Serial2.available()) { Serial2.read(); got++; }
   }
-  if (got < len) { err = "ไม่มีสัญญาณสะท้อน (เช็กสาย/TX กลับขั้ว)"; return false; }
+  if (got < len) { err = "ไม่มีสัญญาณ เช็กสาย/TX กลับขั้ว"; return false; }
   return true;
 }
 
