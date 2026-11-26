@@ -12,7 +12,7 @@
 #include "thai_font.h"
 #include "thai_shape.h"
 
-#define FW_VERSION "0.2.0"
+#define FW_VERSION "0.2.1"
 #ifndef PANEL_NAME
 #define PANEL_NAME "?"
 #endif
@@ -141,32 +141,34 @@ void drawStatus() {
 // ---------------------------------------------------------------- GAUGE
 const char *tileLabel[] = {"เครื่อง °C", "อากาศ °C", "แบต V", "คันเร่ง %", "MAP kPa", "ความเร็ว"};
 
-void tilePos(int i, int &x, int &y) { x = 6 + (i % 3) * 104; y = 96 + (i / 3) * 54; }
+void tilePos(int i, int &x, int &y) { x = 6 + (i % 3) * 104; y = 94 + (i / 3) * 56; }
 
 void drawGaugeStatic() {
   tft.fillRect(0, 0, 320, TAB_Y, C_BG);
   th("รอบ/นาที", 314, 7, TR_DATUM, C_DIM, C_BG);
-  tft.drawRect(9, 71, 302, 16, C_LINE);
+  tft.drawRect(9, 74, 302, 16, C_LINE);
   for (int i = 0; i < 6; i++) {
     int x, y; tilePos(i, x, y);
-    tft.fillRoundRect(x, y, 100, 50, 6, C_PANEL);
-    th(tileLabel[i], x + 6, y + 6, TL_DATUM, C_DIM, C_PANEL);
+    tft.fillRoundRect(x, y, 100, 52, 6, C_PANEL);
+    th(tileLabel[i], x + 6, y + 5, TL_DATUM, C_DIM, C_PANEL);
   }
 }
 
 void drawTileValue(int i, const String &v, uint16_t col) {
   int x, y; tilePos(i, x, y);
-  num(v, x + 94, y + 36, MR_DATUM, col, C_PANEL, 4, 86);
+  tft.fillRect(x + 4, y + 25, 92, 26, C_PANEL);
+  num(v, x + 94, y + 26, TR_DATUM, col, C_PANEL, 4);
 }
 
 void drawGaugeValues() {
   drawStatus();
   bool ok = ecu.valid && (setDemo || millis() - ecu.updatedMs < 2000);
-  num(ok ? String(ecu.rpm) : String("----"), 160, 18, TC_DATUM, ok ? C_TEXT : C_DIM, C_BG, 7, 200);
+  tft.fillRect(80, 24, 160, 48, C_BG);
+  num(ok ? String(ecu.rpm) : String("----"), 160, 24, TC_DATUM, ok ? C_TEXT : C_DIM, C_BG, 7);
   int w = ok ? constrain((int)ecu.rpm * 300 / 10000, 0, 300) : 0;
   uint16_t bc = ecu.rpm > 8500 ? C_BAD : (ecu.rpm > 6500 ? C_ACCENT : C_OK);
-  tft.fillRect(10, 72, w, 14, bc);
-  tft.fillRect(10 + w, 72, 300 - w, 14, C_BG);
+  tft.fillRect(10, 75, w, 14, bc);
+  tft.fillRect(10 + w, 75, 300 - w, 14, C_BG);
   if (!ok) {
     for (int i = 0; i < 6; i++) drawTileValue(i, "--", C_DIM);
     return;
