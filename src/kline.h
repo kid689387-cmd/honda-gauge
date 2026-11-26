@@ -20,6 +20,7 @@ public:
   bool readLiveData(EcuData &d);          // table 0x11
   int  readDtc(char codes[][8], int maxCodes, bool past); // returns count, -1 on error
   bool clearDtc();
+  bool readEcmId(char *out, size_t n);    // "01 02 32 0F 01"
   KState state() const { return st; }
   const char *lastError() const { return err; }
 

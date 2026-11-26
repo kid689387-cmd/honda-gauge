@@ -411,6 +411,7 @@ static void drawRaw() {
   button(4, 30, 152, 30, t, C_ACCENT);
   button(164, 30, 152, 30, "อ่าน", C_OK);
   text(app.rawMsg, 6, 66, TL_DATUM, C_DIM, C_BG, F_TH);
+  if (app.ecmId[0]) { char id[48]; snprintf(id, sizeof(id), "ID %s", app.ecmId); text(id, 314, 76, MR_DATUM, C_TEAL, C_BG, F_S); }
   tft.fillRect(3, 88, 314, 116, C_PANEL);
   char line[64];
   for (int row = 0; row * 8 < app.rawLen && row < 7; row++) {
@@ -444,7 +445,7 @@ static void drawSet() {
     tft.drawRoundRect(x, 29, 100, 26, 5, on ? C_ACCENT2 : C_LINE);
     text(setTabs[i], x + 50, 42, MC_DATUM, on ? C_BG : C_TEXT, on ? C_ACCENT : C_PANEL2, F_TH);
   }
-  char b[40];
+  char b[96];
   if (app.setTab == 0) {
     setRow(4, 60, 312, "ความสว่าง", nullptr, 0, C_WARN);
     button(132, 63, 30, 26, "-", C_ACCENT);
@@ -467,6 +468,8 @@ static void drawSet() {
     setRow(4, 94, 312, "โหมดสาธิต", onOff(app.set.demo), app.set.demo ? C_WARN : C_DIM, C_WARN);
     setRow(4, 128, 312, "TX กลับขั้ว", onOff(app.set.invTx), C_WARN, C_ACCENT);
     text("TX เปิด = ทรานซิสเตอร์  ปิด = L9637D", 10, 164, TL_DATUM, C_DIM, C_BG, F_TH);
+    snprintf(b, sizeof(b), "รหัสกล่อง: %s", app.ecmId[0] ? app.ecmId : "ยังไม่ได้อ่าน");
+    text(b, 10, 186, TL_DATUM, app.ecmId[0] ? C_TEAL : C_DIM, C_BG, F_TH);
     snprintf(b, sizeof(b), "เฟิร์มแวร์ %s", FW_VERSION);
     text(b, 312, 222, MR_DATUM, C_LINE, C_BG, F_TH);
   } else {
@@ -642,9 +645,9 @@ void uiTouch(int x, int y) {
     case SCR_RAW:
       if (back) { go(SCR_MENU); break; }
       if (hit(x, y, 4, 30, 152, 30)) {
-        const uint8_t tables[] = {0x10, 0x11, 0x20, 0x21, 0x60, 0x61, 0xD0, 0xD1};
-        int i = 0; while (i < 8 && tables[i] != app.rawTable) i++;
-        app.rawTable = tables[(i + 1) % 8];
+        const uint8_t tables[] = {0x00, 0x10, 0x11, 0x17, 0x20, 0x21, 0x60, 0x61, 0xD0, 0xD1};
+        int i = 0; while (i < 10 && tables[i] != app.rawTable) i++;
+        app.rawTable = tables[(i + 1) % 10];
       } else if (hit(x, y, 164, 30, 152, 30)) {
         strcpy(app.rawMsg, "กำลังอ่าน..."); drawRaw(); actReadRaw();
       }

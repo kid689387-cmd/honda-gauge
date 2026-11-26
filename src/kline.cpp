@@ -151,6 +151,7 @@ int HondaKLine::readDtc(char codes[][8], int maxCodes, bool past) {
         count++;
       }
     }
+    if (plen > 2 && p[2] == 0) break;      // ECU marks the last page with 0 here
   }
   return count;
 }
@@ -160,4 +161,12 @@ bool HondaKLine::clearDtc() {
   uint8_t resp[64], rlen = 0;
   if (!command(req, sizeof(req), resp, rlen)) return false;
   return resp[0] == 0x02;
+}
+
+// ECM ID: table 0x00, first 5 data bytes identify the ECU.
+bool HondaKLine::readEcmId(char *out, size_t n) {
+  uint8_t b[64], len = 0;
+  if (!readTable(0x00, b, len) || len < 5) return false;
+  snprintf(out, n, "%02X %02X %02X %02X %02X", b[0], b[1], b[2], b[3], b[4]);
+  return true;
 }

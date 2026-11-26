@@ -3,7 +3,7 @@
 #include <stdint.h>
 
 #define BRAND_NAME "อู่ช่างวัตร ฟรีดอม"
-#define FW_VERSION "0.5.0"
+#define FW_VERSION "0.5.1"
 
 struct EcuData {
   bool     valid = false;
@@ -69,6 +69,7 @@ struct App {
   char     lastError[128] = "";
   uint32_t holdUntil = 0;     // keep a test screen up until this time
   bool     hasLogo = false;   // a logo has been uploaded
+  char     ecmId[24] = "";    // read from the ECU when it connects
 };
 
 extern App app;

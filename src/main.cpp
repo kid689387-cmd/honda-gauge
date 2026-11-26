@@ -99,6 +99,7 @@ static bool ensureLink() {
   drawStatus();
   bool ok = kline.connect();
   app.link = ok ? LINK_OK : LINK_NONE;
+  if (ok && !kline.readEcmId(app.ecmId, sizeof(app.ecmId))) app.ecmId[0] = 0;
   return ok;
 }
 
