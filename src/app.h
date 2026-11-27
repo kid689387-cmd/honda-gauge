@@ -3,7 +3,7 @@
 #include <stdint.h>
 
 #define BRAND_NAME "อู่ช่างวัตร ฟรีดอม"
-#define FW_VERSION "0.5.1"
+#define FW_VERSION "0.6.0"
 
 struct EcuData {
   bool     valid = false;
@@ -33,7 +33,8 @@ struct Stats {
   uint32_t engineSec = 0, oilSec = 0, starts = 0;
 };
 
-enum Screen { SCR_GAUGE, SCR_MENU, SCR_ALL, SCR_CHECK, SCR_DTC, SCR_STATS, SCR_GRAPH, SCR_RAW, SCR_SET, SCR_OTA, SCR_MODEL };
+enum Screen { SCR_GAUGE, SCR_MENU, SCR_ALL, SCR_CHECK, SCR_DTC, SCR_STATS, SCR_GRAPH, SCR_RAW, SCR_SET, SCR_OTA, SCR_MODEL,
+              SCR_ECU, SCR_ECU_INFO, SCR_ECU_PAGE, SCR_ECU_OP };   // SCR_ECU* = ECU TOOL (screens_ecu.cpp)
 enum Link { LINK_DEMO, LINK_OK, LINK_WAKING, LINK_NONE };
 
 #define HIST_LEN 150
@@ -70,6 +71,15 @@ struct App {
   uint32_t holdUntil = 0;     // keep a test screen up until this time
   bool     hasLogo = false;   // a logo has been uploaded
   char     ecmId[24] = "";    // read from the ECU when it connects
+  // ECU TOOL (screens_ecu.cpp)
+  int      ecuPage = 0;       // which locked page SCR_ECU_PAGE shows
+  char     ecuMsg[128] = "";
+  // operation screen (read / backup / verify) -- also used by the UI test
+  int      opState = 0;       // 0 running, 1 success, 2 failed
+  int      opPct = 0;
+  int      opTest = 0;        // 0 none, 1 UI test to success, 2 UI test to failure
+  uint32_t opT0 = 0, opT1 = 0;
+  char     opTitle[16] = "", opLabel[64] = "", opSub[160] = "", opSize[16] = "--";
 };
 
 extern App app;
@@ -79,6 +89,11 @@ void uiDrawFull();          // redraw the whole current screen
 void uiUpdate();            // refresh live values on the current screen
 void uiTouch(int x, int y); // handle a tap
 void uiColorTest();
+
+// ECU TOOL screens (screens_ecu.cpp)
+void ecuDrawFull();
+void ecuUpdate();
+void ecuTouch(int x, int y);
 
 // Hardware actions (main.cpp, stubbed in the simulator)
 void actReadDtc();
@@ -91,4 +106,5 @@ void actApplyInvTx();
 void actSaveSettings();
 void actSaveStats();
 void actShowLogo();          // draw the uploaded logo full screen
+void actConnectEcu();        // ECU TOOL: wake the ECU and read its ID (read-only)
 uint32_t nowMs();

@@ -124,6 +124,19 @@ void actClearDtc() {
   else snprintf(app.dtcMsg, sizeof(app.dtcMsg), "ล้างไม่สำเร็จ: %s", kline.lastError());
 }
 
+// ECU TOOL > CONNECT: wake the ECU and read its ID. Read-only, nothing is written.
+void actConnectEcu() {
+  if (app.set.demo) { strcpy(app.ecuMsg, "ปิดโหมดสาธิต (ตั้งค่า > ECU) ก่อน"); return; }
+  kline.connect();   // fresh wake-up even if a link already exists
+  app.link = kline.state() == K_CONNECTED ? LINK_OK : LINK_NONE;
+  if (app.link == LINK_OK) {
+    if (!kline.readEcmId(app.ecmId, sizeof(app.ecmId))) app.ecmId[0] = 0;
+    strcpy(app.ecuMsg, app.ecmId[0] ? "เชื่อมต่อสำเร็จ" : "เชื่อมต่อแล้ว แต่อ่านรหัสกล่องไม่ได้");
+  } else {
+    snprintf(app.ecuMsg, sizeof(app.ecuMsg), "ไม่สำเร็จ: %s", kline.lastError());
+  }
+}
+
 void actReadRaw() {
   if (app.set.demo) { strcpy(app.rawMsg, "ปิดโหมดสาธิตในหน้าตั้งค่าก่อน"); return; }
   if (!ensureLink()) { strlcpy(app.rawMsg, kline.lastError(), sizeof(app.rawMsg)); return; }

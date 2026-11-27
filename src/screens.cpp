@@ -135,7 +135,12 @@ static void drawMenu() {
     icon(menu[i].ic, x + 37, y + 30, menu[i].col);
     text(menu[i].name, x + 37, y + 64, MC_DATUM, C_TEXT, C_PANEL, F_TH);
   }
-  button(4, 208, 312, 30, "< กลับหน้าเกจ", C_ACCENT);
+  button(4, 208, 154, 30, "< กลับหน้าเกจ", C_ACCENT);
+  // ECU TOOL (screens_ecu.cpp): neon-green button so it stands out from the gauge pages
+  tft.fillRoundRect(162, 208, 154, 30, 5, RGB(9, 16, 12));
+  tft.drawRoundRect(162, 208, 154, 30, 5, RGB(200, 255, 46));
+  tft.drawRoundRect(163, 209, 152, 28, 4, RGB(76, 255, 26));
+  text("ECU TOOL", 239, 223, MC_DATUM, RGB(200, 255, 46), RGB(9, 16, 12), F_S);
 }
 
 // ================================================================ ALL DATA
@@ -584,6 +589,7 @@ void uiDrawFull() {
     case SCR_SET:   drawSet(); break;
     case SCR_OTA:   drawOta(); return;
     case SCR_MODEL: drawModel(); break;
+    case SCR_ECU: case SCR_ECU_INFO: case SCR_ECU_PAGE: case SCR_ECU_OP: ecuDrawFull(); break;
   }
   uiUpdate();
 }
@@ -596,6 +602,7 @@ void uiUpdate() {
     case SCR_STATS: updateStats(); break;
     case SCR_GRAPH: updateGraph(); break;
     case SCR_MENU: case SCR_DTC: case SCR_RAW: case SCR_SET: case SCR_MODEL: drawStatus(); break;
+    case SCR_ECU: case SCR_ECU_INFO: case SCR_ECU_PAGE: case SCR_ECU_OP: ecuUpdate(); break;
     default: break;
   }
 }
@@ -608,7 +615,7 @@ void uiTouch(int x, int y) {
   switch (app.screen) {
     case SCR_GAUGE: go(SCR_MENU); break;
     case SCR_MENU:
-      if (y >= 204) { go(SCR_GAUGE); break; }
+      if (y >= 204) { go(x >= 160 ? SCR_ECU : SCR_GAUGE); break; }
       for (int i = 0; i < 8; i++) {
         int tx, ty; menuTile(i, tx, ty);
         if (hit(x, y, tx, ty, 75, 80)) { go(menu[i].to); break; }
@@ -686,5 +693,6 @@ void uiTouch(int x, int y) {
     case SCR_MODEL: touchModel(x, y); break;
     case SCR_OTA:
       break;   // handled in main.cpp (restart)
+    case SCR_ECU: case SCR_ECU_INFO: case SCR_ECU_PAGE: case SCR_ECU_OP: ecuTouch(x, y); break;
   }
 }

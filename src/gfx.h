@@ -23,7 +23,7 @@ constexpr uint16_t C_BAD     = RGB(232, 72, 78);
 constexpr uint16_t C_PURPLE  = RGB(168, 120, 232);
 constexpr uint16_t C_TEAL    = RGB(64, 196, 200);
 
-enum Font { F_TH, F_THB, F_XL, F_MD, F_M, F_S, F_GLCD };   // F_XL/F_MD = digits only
+enum Font { F_TH, F_THB, F_XL, F_MD, F_M, F_S, F_GLCD, F_TITLE };   // F_XL/F_MD = digits only, F_TITLE = A-Z 0-9 %
 
 // Draw text. Thai fonts get mark positioning automatically.
 // pad > 0 clears that many pixels of width behind the text (for live values).

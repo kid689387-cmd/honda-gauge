@@ -7,6 +7,7 @@
 #include "font_num_m.h"
 #include "font_num_md.h"
 #include "font_small.h"
+#include "font_title.h"
 #include <stdio.h>
 #include <math.h>
 #include <string>
@@ -22,6 +23,7 @@ static void useFont(Font f) {
     case F_MD:  want = fontNumMD; break;
     case F_M:   want = fontNumM; break;
     case F_S:   want = fontSmall; break;
+    case F_TITLE: want = fontTitle; break;
     default:    want = nullptr; break;
   }
   if (want == loaded) return;
