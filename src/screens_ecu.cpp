@@ -132,6 +132,23 @@ static const EcuTile tiles[8] = {
 };
 static void tileXY(int i, int &x, int &y) { x = 4 + (i % 4) * 79; y = 56 + (i / 4) * 74; }
 
+// Thai tile label. If it is too wide for the tile, the English word after the last
+// space ("อ่าน ECU") is drawn in the smaller F_S font so the whole label fits.
+static void tileLabel(const char *s, int cx, int cy) {
+  const int maxW = 66;
+  if (textWidth(s, F_TH) <= maxW) { text(s, cx, cy, MC_DATUM, C_TEXT, N_PANEL, F_TH); return; }
+  const char *sp = strrchr(s, ' ');
+  if (!sp) { text(s, cx, cy, MC_DATUM, C_TEXT, N_PANEL, F_TH); return; }
+  char th[48];
+  size_t n = (size_t)(sp - s) < sizeof(th) - 1 ? (size_t)(sp - s) : sizeof(th) - 1;
+  memcpy(th, s, n); th[n] = 0;
+  const char *en = sp + 1;
+  int wTh = textWidth(th, F_TH), wEn = textWidth(en, F_S), gap = 4;
+  int x0 = cx - (wTh + gap + wEn) / 2;
+  text(th, x0, cy, ML_DATUM, C_TEXT, N_PANEL, F_TH);
+  text(en, x0 + wTh + gap, cy - 1, ML_DATUM, C_TEXT, N_PANEL, F_S);
+}
+
 static bool modelIsTarget() {
   return app.set.model < BIKE_COUNT && strstr(bikeModels[app.set.model].code, "K1M");
 }
@@ -149,7 +166,7 @@ static void drawEcuHome() {
     int x, y; tileXY(i, x, y);
     chamfer(x, y, 75, 68, 8, i == 7 ? C_DIM : N_GREEN);
     text(tiles[i].en, x + 38, y + 22, MC_DATUM, i == 7 ? C_DIM : N_LIME, N_PANEL, F_S);
-    text(tiles[i].th, x + 38, y + 46, MC_DATUM, C_TEXT, N_PANEL, F_TH);
+    tileLabel(tiles[i].th, x + 38, y + 46);
   }
   neonButton(4, 208, 104, 30, "< เมนู", N_LIME);
   neonButton(212, 208, 104, 30, "UI TEST", C_DIM, F_S);
