@@ -54,13 +54,15 @@ bool touchGetRaw(int &ox, int &oy) {
   int z2 = xfer(0xC1);             // Z2
   int z = z1 + 4095 - z2;
   if (z < Z_THRESHOLD) { digitalWrite(T_CS, HIGH); return false; }
-  xfer(0x91);                       // discard first (noisy) Y
-  int x0 = xfer(0xD1), y0 = xfer(0x91);   // 0xD1 = X, 0x91 = Y
-  int x1 = xfer(0xD1), y1 = xfer(0x91);
-  int x2 = xfer(0xD0), y2 = xfer(0x90);   // last read powers the chip down
+  // Match XPT2046_Touchscreen at rotation 1: xraw comes from the 0x91 channel,
+  // yraw from the 0xD1 channel. (The library reads them pipelined; done plainly
+  // here, so the two channels must be grouped the same way or the axes swap.)
+  xfer(0x91);                       // discard first (noisy) reading
+  int a0 = xfer(0x91), b0 = xfer(0xD1);
+  int a1 = xfer(0x91), b1 = xfer(0xD1);
+  int a2 = xfer(0x90), b2 = xfer(0xD0);   // power-down variants on the last pair
   digitalWrite(T_CS, HIGH);
-  // rotation 1: xraw = x, yraw = y
-  ox = besttwoavg(x0, x1, x2);
-  oy = besttwoavg(y0, y1, y2);
+  ox = besttwoavg(a0, a1, a2);      // 0x91 channel -> xraw
+  oy = besttwoavg(b0, b1, b2);      // 0xD1 channel -> yraw
   return true;
 }
