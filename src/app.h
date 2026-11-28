@@ -3,7 +3,7 @@
 #include <stdint.h>
 
 #define BRAND_NAME "อู่ช่างวัตร ฟรีดอม"
-#define FW_VERSION "0.6.0"
+#define FW_VERSION "0.7.0"
 
 struct EcuData {
   bool     valid = false;
@@ -34,7 +34,8 @@ struct Stats {
 };
 
 enum Screen { SCR_GAUGE, SCR_MENU, SCR_ALL, SCR_CHECK, SCR_DTC, SCR_STATS, SCR_GRAPH, SCR_RAW, SCR_SET, SCR_OTA, SCR_MODEL,
-              SCR_ECU, SCR_ECU_INFO, SCR_ECU_PAGE, SCR_ECU_OP };   // SCR_ECU* = ECU TOOL (screens_ecu.cpp)
+              SCR_ECU, SCR_ECU_INFO, SCR_ECU_PAGE, SCR_ECU_OP,   // SCR_ECU* = ECU TOOL (screens_ecu.cpp)
+              SCR_SDFW };                                        // firmware picker (SD card)
 enum Link { LINK_DEMO, LINK_OK, LINK_WAKING, LINK_NONE };
 
 #define HIST_LEN 150
@@ -69,7 +70,7 @@ struct App {
   int      touchX = -1, touchY = -1;
   char     lastError[128] = "";
   uint32_t holdUntil = 0;     // keep a test screen up until this time
-  bool     hasLogo = false;   // a logo has been uploaded
+  bool     hasLogo = false;   // a logo has been uploaded (LittleFS or SD)
   char     ecmId[24] = "";    // read from the ECU when it connects
   // ECU TOOL (screens_ecu.cpp)
   int      ecuPage = 0;       // which locked page SCR_ECU_PAGE shows
@@ -80,6 +81,18 @@ struct App {
   int      opTest = 0;        // 0 none, 1 UI test to success, 2 UI test to failure
   uint32_t opT0 = 0, opT1 = 0;
   char     opTitle[16] = "", opLabel[64] = "", opSub[160] = "", opSize[16] = "--";
+  // SD card
+  bool     sdReady = false;           // card mounted
+  uint16_t sdSizeMB = 0;              // capacity
+  bool     logging = false;           // recording live values to CSV
+  uint32_t logRows = 0;               // rows written this session
+  char     logName[24] = "";          // current CSV file name
+  char     sdFiles[8][40];            // .bin files found in the card root
+  int      sdFileCount = -2;          // -2 not listed yet, -1 none found, else count
+  int      flashArmed = -1;           // index armed for flashing (double-tap confirm)
+  uint32_t flashArmedMs = 0;
+  int      flashPct = -1;             // -1 idle, 0..100 while writing
+  char     sdMsg[96] = "";
 };
 
 extern App app;
@@ -107,4 +120,9 @@ void actSaveSettings();
 void actSaveStats();
 void actShowLogo();          // draw the uploaded logo full screen
 void actConnectEcu();        // ECU TOOL: wake the ECU and read its ID (read-only)
+// SD card actions (main.cpp, stubbed in the simulator)
+void actSdInit();            // (re)mount the card, fill app.sdReady/sdSizeMB
+void actSdLogToggle();       // start/stop CSV logging
+void actSdListFw();          // scan the card for .bin files into app.sdFiles
+void actSdFlash(int idx);    // flash app.sdFiles[idx] into the ESP32 (blocking)
 uint32_t nowMs();

@@ -18,6 +18,11 @@ void actApplyInvTx() {}
 void actSaveSettings() {}
 void actSaveStats() {}
 void actShowLogo() {}
+void actSdInit() {}
+void actSdLogToggle() {}
+void actSdListFw() {}
+void actSdFlash(int) {}
+void actConnectEcu() {}
 
 static void save(const char *name) {
   char p[128]; snprintf(p, sizeof(p), "%s/%s.ppm", getenv("OUT") ? getenv("OUT") : ".", name);
@@ -60,5 +65,17 @@ int main() {
   for (int g = 0; g < 3; g++) { app.modelGroup = g; app.modelPage = g == 1 ? 1 : 0; char n[20]; snprintf(n, sizeof(n), "14_model%d", g); shot(SCR_MODEL, n); }
   app.set.maxRpm = 14000; e.rpm = 11250; shot(SCR_GAUGE, "11_gauge_14k"); app.set.maxRpm = 10000;
   e.valid = false; app.link = LINK_NONE; shot(SCR_GAUGE, "12_gauge_noecu");
+  // SD card tab + firmware picker
+  app.sdReady = true; app.sdSizeMB = 32; app.setTab = 3; app.sdMsg[0] = 0;
+  shot(SCR_SET, "15_set_sd");
+  app.logging = true; strcpy(app.logName, "log000.csv"); app.logRows = 1842;
+  shot(SCR_SET, "16_set_sd_rec"); app.logging = false;
+  app.sdFileCount = 3;
+  strcpy(app.sdFiles[0], "honda-gauge-ili9341-full.bin");
+  strcpy(app.sdFiles[1], "honda-gauge-st7789-full.bin");
+  strcpy(app.sdFiles[2], "backup_0.5.1.bin");
+  shot(SCR_SDFW, "17_sdfw");
+  app.flashArmed = 0; app.flashArmedMs = simNow;
+  shot(SCR_SDFW, "17b_sdfw_armed");
   return 0;
 }

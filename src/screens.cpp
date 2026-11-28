@@ -438,17 +438,17 @@ static void setRow(int x, int y, int w, const char *label, const char *val, uint
 }
 
 static const char *onOff(bool v) { return v ? "เปิด" : "ปิด"; }
-static const char *setTabs[3] = {"แสดงผล", "ECU", "WiFi"};
+static const char *setTabs[4] = {"แสดงผล", "ECU", "WiFi", "SD"};
 
 static void drawSet() {
   tft.fillScreen(C_BG);
   header("ตั้งค่า", C_ACCENT);
-  for (int i = 0; i < 3; i++) {
+  for (int i = 0; i < 4; i++) {
     bool on = app.setTab == i;
-    int x = 4 + i * 105;
-    tft.fillRoundRect(x, 29, 100, 26, 5, on ? C_ACCENT : C_PANEL2);
-    tft.drawRoundRect(x, 29, 100, 26, 5, on ? C_ACCENT2 : C_LINE);
-    text(setTabs[i], x + 50, 42, MC_DATUM, on ? C_BG : C_TEXT, on ? C_ACCENT : C_PANEL2, F_TH);
+    int x = 4 + i * 78;
+    tft.fillRoundRect(x, 29, 75, 26, 5, on ? C_ACCENT : C_PANEL2);
+    tft.drawRoundRect(x, 29, 75, 26, 5, on ? C_ACCENT2 : C_LINE);
+    text(setTabs[i], x + 37, 42, MC_DATUM, on ? C_BG : C_TEXT, on ? C_ACCENT : C_PANEL2, F_TH);
   }
   char b[96];
   if (app.setTab == 0) {
@@ -477,12 +477,25 @@ static void drawSet() {
     text(b, 10, 186, TL_DATUM, app.ecmId[0] ? C_TEAL : C_DIM, C_BG, F_TH);
     snprintf(b, sizeof(b), "เฟิร์มแวร์ %s", FW_VERSION);
     text(b, 312, 222, MR_DATUM, C_LINE, C_BG, F_TH);
-  } else {
+  } else if (app.setTab == 2) {
     setRow(4, 60, 312, "อัปเดต / เปลี่ยนโลโก้ ผ่าน WiFi", ">", C_ACCENT2, C_OK);
     setRow(4, 94, 312, "โชว์โลโก้ตอนเปิดเครื่อง", onOff(app.set.showLogo), C_WARN, C_ACCENT);
     setRow(4, 128, 312, "ดูโลโก้", app.hasLogo ? ">" : "ยังไม่มี", C_ACCENT2, C_PURPLE);
     text("WiFi: HondaGauge  รหัส 12345678", 10, 166, TL_DATUM, C_DIM, C_BG, F_TH);
     text("แล้วเปิดเว็บ 192.168.4.1", 10, 186, TL_DATUM, C_DIM, C_BG, F_TH);
+  } else {
+    char s[48];
+    if (app.sdReady) snprintf(s, sizeof(s), "พร้อม %u MB", app.sdSizeMB);
+    else strcpy(s, "ไม่พบ (แตะ)");
+    setRow(4, 60, 312, "การ์ด SD", s, app.sdReady ? C_OK : C_WARN, C_TEAL);
+    setRow(4, 94, 312, "บันทึก log ขณะขี่", app.logging ? "กำลังบันทึก" : onOff(false),
+           app.logging ? C_OK : C_DIM, C_WARN);
+    setRow(4, 128, 312, "อัปเดตจากไฟล์ใน SD", ">", C_ACCENT2, C_PURPLE);
+    if (app.logging) {
+      snprintf(s, sizeof(s), "%s  %lu แถว", app.logName, (unsigned long)app.logRows);
+      text(s, 10, 166, TL_DATUM, C_TEAL, C_BG, F_TH);
+    } else text("วางไฟล์ -full.bin ในการ์ดเพื่ออัปเดต", 10, 166, TL_DATUM, C_DIM, C_BG, F_TH);
+    if (app.sdMsg[0]) text(app.sdMsg, 10, 186, TL_DATUM, C_DIM, C_BG, F_TH);
   }
   backButton();
 }
@@ -575,6 +588,53 @@ static void drawOta() {
   button(90, 196, 140, 38, "ออก", C_BAD);
 }
 
+// ================================================================ SD firmware
+static void drawSdFw() {
+  tft.fillScreen(C_BG);
+  header("อัปเดตจาก SD", C_PURPLE);
+  if (!app.sdReady) {
+    text("ไม่พบการ์ด SD", 160, 104, MC_DATUM, C_WARN, C_BG, F_TH);
+    text("ใส่การ์ดแล้วกลับไปแท็บ SD", 160, 128, MC_DATUM, C_DIM, C_BG, F_TH);
+    backButton();
+    button(210, 208, 106, 30, "สแกนใหม่", C_ACCENT);
+    return;
+  }
+  if (app.sdFileCount <= 0) {
+    text(app.sdFileCount == -1 ? "ไม่พบไฟล์ .bin ในการ์ด" : "กด สแกน เพื่อค้นหาไฟล์",
+         160, 100, MC_DATUM, C_DIM, C_BG, F_TH);
+    text("วางไฟล์ -full.bin ไว้ที่โฟลเดอร์หลัก", 160, 124, MC_DATUM, C_DIM, C_BG, F_TH);
+  } else {
+    for (int i = 0; i < app.sdFileCount && i < 4; i++) {
+      int y = 32 + i * 38;
+      bool armed = app.flashArmed == i && nowMs() - app.flashArmedMs < 4000;
+      uint16_t bg = armed ? C_BAD : C_PANEL;
+      tft.fillRoundRect(4, y, 312, 35, 4, bg);
+      tft.drawRoundRect(4, y, 312, 35, 4, armed ? C_WARN : C_LINE);
+      text(app.sdFiles[i], 12, y + 4, TL_DATUM, C_TEXT, bg, F_S);          // name = ASCII
+      text(armed ? "แตะอีกครั้งเพื่อยืนยัน" : "แตะเพื่อเขียน", 12, y + 19, TL_DATUM,
+           armed ? C_WARN : C_DIM, bg, F_TH);
+    }
+    text("ห้ามดับไฟหรือถอดการ์ดระหว่างเขียน", 160, 192, MC_DATUM, C_WARN, C_BG, F_TH);
+  }
+  backButton();
+  button(210, 208, 106, 30, "สแกนใหม่", C_ACCENT);
+}
+
+static void touchSdFw(int x, int y) {
+  if (hit(x, y, 4, 208, 104, 30)) { app.setTab = 3; app.screen = SCR_SET; app.needFull = true; return; }
+  if (hit(x, y, 210, 208, 106, 30)) { actSdListFw(); app.flashArmed = -1; app.needFull = true; return; }
+  if (app.sdReady && app.sdFileCount > 0) {
+    for (int i = 0; i < app.sdFileCount && i < 4; i++) {
+      if (hit(x, y, 4, 32 + i * 38, 312, 35)) {
+        if (app.flashArmed == i && nowMs() - app.flashArmedMs < 4000) {
+          app.flashArmed = -1; actSdFlash(i);     // blocking; restarts on success
+        } else { app.flashArmed = i; app.flashArmedMs = nowMs(); }
+      }
+    }
+  }
+  app.needFull = true;
+}
+
 // ================================================================ dispatch
 void uiDrawFull() {
   switch (app.screen) {
@@ -590,6 +650,7 @@ void uiDrawFull() {
     case SCR_OTA:   drawOta(); return;
     case SCR_MODEL: drawModel(); break;
     case SCR_ECU: case SCR_ECU_INFO: case SCR_ECU_PAGE: case SCR_ECU_OP: ecuDrawFull(); break;
+    case SCR_SDFW:  drawSdFw(); return;
   }
   uiUpdate();
 }
@@ -662,7 +723,7 @@ void uiTouch(int x, int y) {
       break;
     case SCR_SET:
       if (back) { go(SCR_MENU); break; }
-      for (int i = 0; i < 3; i++) if (hit(x, y, 4 + i * 105, 29, 100, 26)) app.setTab = i;
+      for (int i = 0; i < 4; i++) if (hit(x, y, 4 + i * 78, 29, 75, 26)) app.setTab = i;
       if (app.setTab == 0) {
         if (hit(x, y, 126, 60, 42, 32)) { app.set.bright = app.set.bright > 20 ? app.set.bright - 10 : 10; actApplyBrightness(); }
         else if (hit(x, y, 236, 60, 44, 32)) { app.set.bright = app.set.bright < 100 ? app.set.bright + 10 : 100; actApplyBrightness(); }
@@ -682,15 +743,20 @@ void uiTouch(int x, int y) {
         }
         if (hit(x, y, 4, 94, 312, 32)) app.set.demo = !app.set.demo;
         else if (hit(x, y, 4, 128, 312, 32)) { app.set.invTx = !app.set.invTx; actApplyInvTx(); }
-      } else {
+      } else if (app.setTab == 2) {
         if (hit(x, y, 4, 60, 312, 32)) { actSaveSettings(); go(SCR_OTA); actStartOta(); return; }
         if (hit(x, y, 4, 94, 312, 32)) app.set.showLogo = !app.set.showLogo;
         else if (hit(x, y, 4, 128, 312, 32) && app.hasLogo) { actShowLogo(); app.holdUntil = nowMs() + 4000; }
+      } else {   // SD tab
+        if (hit(x, y, 4, 60, 312, 32)) actSdInit();                 // tap status to (re)mount
+        else if (hit(x, y, 4, 94, 312, 32)) actSdLogToggle();       // start/stop logging
+        else if (hit(x, y, 4, 128, 312, 32)) { actSdListFw(); go(SCR_SDFW); return; }
       }
       actSaveSettings();
       app.needFull = true;
       break;
     case SCR_MODEL: touchModel(x, y); break;
+    case SCR_SDFW:  touchSdFw(x, y); break;
     case SCR_OTA:
       break;   // handled in main.cpp (restart)
     case SCR_ECU: case SCR_ECU_INFO: case SCR_ECU_PAGE: case SCR_ECU_OP: ecuTouch(x, y); break;

@@ -3,29 +3,33 @@
 // statistics storage and WiFi update. Screens live in screens.cpp.
 #include <Arduino.h>
 #include <SPI.h>
+#include <strings.h>   // strcasecmp
 #include <TFT_eSPI.h>
-#include <XPT2046_Touchscreen.h>
 #include <Preferences.h>
 #include <WiFi.h>
 #include <WebServer.h>
 #include <Update.h>
 #include <LittleFS.h>
+#include <FS.h>
+#include <SD.h>
 #include "app.h"
 #include "gfx.h"
 #include "kline.h"
 #include "models.h"
+#include "touch.h"
 
-#define TOUCH_CS   33
-#define TOUCH_IRQ  36
-#define TOUCH_MOSI 32
-#define TOUCH_MISO 39
-#define TOUCH_CLK  25
 #define BL_CH      0
+
+// microSD on the CYD: hardware VSPI, default pins. The touch panel used to
+// own VSPI, so it was moved to software SPI (touch.cpp) to free the bus.
+#define SD_SCK   18
+#define SD_MISO  19
+#define SD_MOSI  23
+#define SD_CS     5
 
 TFT_eSPI tft;
 App app;
-static SPIClass touchSpi(VSPI);
-static XPT2046_Touchscreen ts(TOUCH_CS, TOUCH_IRQ);
+static SPIClass sdSpi(VSPI);
 static Preferences prefs;
 static HondaKLine kline;
 static WebServer *server = nullptr;
@@ -153,6 +157,154 @@ void actReadRaw() {
 #define LOGO_FILE  "/logo.raw"
 #define LOGO_BYTES (320 * 240 * 2)
 
+// ---------------------------------------------------------------- SD card
+// Card lives on VSPI (18/19/23/5). Touch was moved to software SPI so the two
+// no longer fight over the bus.
+static fs::File logFile;
+
+static void streamLogo(fs::File &f) {
+  static uint16_t row[320];
+  tft.setSwapBytes(true);
+  for (int y = 0; y < 240; y++) {
+    f.read((uint8_t *)row, sizeof(row));
+    tft.pushImage(0, y, 320, 1, row);
+  }
+  tft.setSwapBytes(false);
+}
+
+static bool sdHasLogo() {
+  if (!app.sdReady) return false;
+  fs::File f = SD.open("/logo.raw", FILE_READ);
+  bool ok = f && f.size() == LOGO_BYTES;
+  if (f) f.close();
+  return ok;
+}
+
+static bool sdShowLogo() {         // draw /logo.raw from the card, if valid
+  if (!app.sdReady) return false;
+  fs::File f = SD.open("/logo.raw", FILE_READ);
+  if (!f || f.size() != LOGO_BYTES) { if (f) f.close(); return false; }
+  streamLogo(f);
+  f.close();
+  return true;
+}
+
+void actSdInit() {
+  if (app.sdReady) SD.end();          // allow a clean re-mount
+  app.sdReady = false;
+  app.sdSizeMB = 0;
+  sdSpi.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
+  if (!SD.begin(SD_CS, sdSpi, 20000000)) { strcpy(app.sdMsg, "ไม่พบการ์ด"); return; }
+  if (SD.cardType() == CARD_NONE) { SD.end(); strcpy(app.sdMsg, "ไม่พบการ์ด"); return; }
+  app.sdReady = true;
+  app.sdSizeMB = (uint16_t)(SD.cardSize() / (1024ULL * 1024ULL));
+  snprintf(app.sdMsg, sizeof(app.sdMsg), "พร้อม %u MB", app.sdSizeMB);
+}
+
+void actSdListFw() {
+  app.sdFileCount = -1;
+  if (!app.sdReady) { strcpy(app.sdMsg, "ไม่พบการ์ด"); return; }
+  fs::File dir = SD.open("/");
+  if (!dir) return;
+  int n = 0;
+  for (fs::File e = dir.openNextFile(); e && n < 8; e = dir.openNextFile()) {
+    if (!e.isDirectory()) {
+      const char *nm = e.name();
+      const char *slash = strrchr(nm, '/');
+      if (slash) nm = slash + 1;
+      size_t L = strlen(nm);
+      if (L > 4 && strcasecmp(nm + L - 4, ".bin") == 0 && nm[0] != '.') {
+        strlcpy(app.sdFiles[n], nm, sizeof(app.sdFiles[n]));
+        n++;
+      }
+    }
+    e.close();
+  }
+  dir.close();
+  app.sdFileCount = n ? n : -1;
+}
+
+static const char *logHeader =
+  "ms,rpm,tps_pct,ect_c,iat_c,map_kpa,speed,batt_v,inj_ms,ign_deg,o2_v,stft,ltft\n";
+
+void actSdLogToggle() {
+  if (app.logging) {                 // stop
+    if (logFile) logFile.close();
+    app.logging = false;
+    snprintf(app.sdMsg, sizeof(app.sdMsg), "หยุด log แล้ว (%lu แถว)", (unsigned long)app.logRows);
+    return;
+  }
+  if (!app.sdReady) { strcpy(app.sdMsg, "ใส่การ์ดก่อน"); return; }
+  // pick a non-clashing name log000.csv..log999.csv
+  char path[24];
+  int i = 0;
+  for (; i < 1000; i++) { snprintf(path, sizeof(path), "/log%03d.csv", i); if (!SD.exists(path)) break; }
+  logFile = SD.open(path, FILE_WRITE);
+  if (!logFile) { strcpy(app.sdMsg, "เปิดไฟล์ไม่ได้"); return; }
+  logFile.print(logHeader);
+  app.logRows = 0;
+  app.logging = true;
+  strlcpy(app.logName, path + 1, sizeof(app.logName));   // drop leading '/'
+  snprintf(app.sdMsg, sizeof(app.sdMsg), "บันทึกลง %s", app.logName);
+}
+
+static void sdLogRow() {
+  if (!app.logging || !logFile) return;
+  const EcuData &e = app.ecu;
+  char line[160];
+  int n = snprintf(line, sizeof(line),
+    "%lu,%u,%.0f,%d,%d,%d,%d,%.2f,%.2f,%.1f,%.2f,%.3f,%.3f\n",
+    (unsigned long)millis(), e.rpm, e.tpsPct, e.ectC, e.iatC, e.mapKpa, e.speedKmh,
+    e.battV, e.injMs, e.ignDeg, e.o2V, e.stft, e.ltft);
+  logFile.write((const uint8_t *)line, n);
+  app.logRows++;
+  if ((app.logRows & 0x1F) == 0) logFile.flush();        // persist every 32 rows
+}
+
+// Blocking firmware write from a .bin on the card, with a progress screen.
+void actSdFlash(int idx) {
+  if (!app.sdReady || idx < 0 || idx >= 8) return;
+  char path[48]; snprintf(path, sizeof(path), "/%s", app.sdFiles[idx]);
+  fs::File f = SD.open(path, FILE_READ);
+  if (!f) { strcpy(app.sdMsg, "เปิดไฟล์ไม่ได้"); app.flashPct = -1; return; }
+  size_t total = f.size();
+  if (total < 0x10000 || !Update.begin(total)) {
+    f.close(); strcpy(app.sdMsg, "ไฟล์เล็กเกินไป/พื้นที่ไม่พอ"); app.flashPct = -1; return;
+  }
+  tft.fillScreen(C_BG);
+  text("กำลังเขียนเฟิร์มแวร์", 160, 70, MC_DATUM, C_TEXT, C_BG, F_TH);
+  text("ห้ามดับไฟ / ถอดการ์ด", 160, 96, MC_DATUM, C_WARN, C_BG, F_TH);
+  uint8_t buf[2048];
+  size_t done = 0;
+  int lastPct = -1;
+  while (done < total) {
+    size_t got = f.read(buf, sizeof(buf));
+    if (got == 0) break;
+    if (Update.write(buf, got) != got) break;
+    done += got;
+    int pct = (int)(done * 100 / total);
+    if (pct != lastPct) {
+      lastPct = pct; app.flashPct = pct;
+      tft.fillRect(40, 130, 240, 16, C_PANEL2);
+      tft.fillRect(40, 130, 240 * pct / 100, 16, C_OK);
+      char b[8]; snprintf(b, sizeof(b), "%d%%", pct);
+      text(b, 160, 162, MC_DATUM, C_TEXT, C_BG, F_S, 80);
+    }
+  }
+  f.close();
+  bool ok = (done == total) && Update.end(true) && !Update.hasError();
+  app.flashPct = -1;
+  if (ok) {
+    text("สำเร็จ กำลังรีสตาร์ต...", 160, 196, MC_DATUM, C_OK, C_BG, F_TH);
+    delay(1200); ESP.restart();
+  } else {
+    Update.abort();
+    strcpy(app.sdMsg, "เขียนไม่สำเร็จ ไฟล์อาจไม่ใช่ -full.bin");
+    text("ไม่สำเร็จ แตะเพื่อกลับ", 160, 196, MC_DATUM, C_BAD, C_BG, F_TH);
+    app.needFull = true;
+  }
+}
+
 static const char otaPage[] PROGMEM = R"HTML(<!DOCTYPE html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>Gauge</title>
 <style>body{font-family:sans-serif;background:#0b1119;color:#e8eff6;margin:0;padding:16px}
@@ -190,15 +342,10 @@ static fs::File logoUpload;
 static size_t logoBytes = 0;
 
 void actShowLogo() {
+  if (sdShowLogo()) return;           // card takes priority
   fs::File f = LittleFS.open(LOGO_FILE, "r");
   if (!f || f.size() != LOGO_BYTES) { if (f) f.close(); return; }
-  static uint16_t row[320];
-  tft.setSwapBytes(true);
-  for (int y = 0; y < 240; y++) {
-    f.read((uint8_t *)row, sizeof(row));
-    tft.pushImage(0, y, 320, 1, row);
-  }
-  tft.setSwapBytes(false);
+  streamLogo(f);
   f.close();
 }
 
@@ -326,12 +473,12 @@ static void sampleHistory() {
 // ---------------------------------------------------------------- touch
 static bool getTouch(int &x, int &y) {
   static uint32_t lastMs = 0;
-  if (!ts.touched()) return false;
-  TS_Point p = ts.getPoint();
+  int rx, ry;
+  if (!touchGetRaw(rx, ry)) return false;
   if (millis() - lastMs < 250) return false;
   lastMs = millis();
-  x = map(p.x, 200, 3700, 0, 320);
-  y = map(p.y, 240, 3800, 0, 240);
+  x = map(rx, 200, 3700, 0, 320);
+  y = map(ry, 240, 3800, 0, 240);
   if (app.set.flipTouch) { x = 320 - x; y = 240 - y; }
   x = constrain(x, 0, 319);
   y = constrain(y, 0, 239);
@@ -364,15 +511,16 @@ void setup() {
   ledcSetup(BL_CH, 5000, 8);
   ledcAttachPin(TFT_BL, BL_CH);
   actApplyBrightness();
-  touchSpi.begin(TOUCH_CLK, TOUCH_MISO, TOUCH_MOSI, TOUCH_CS);
-  ts.begin(touchSpi);
-  ts.setRotation(1);
+  touchBegin();
   kline.begin(app.set.invTx);
+  actSdInit();                       // mount the card (VSPI) if present
+  bool liteLogo = false;
   if (LittleFS.begin(true)) {
     fs::File f = LittleFS.open(LOGO_FILE, "r");
-    app.hasLogo = f && f.size() == LOGO_BYTES;
+    liteLogo = f && f.size() == LOGO_BYTES;
     if (f) f.close();
   }
+  app.hasLogo = liteLogo || sdHasLogo();
   if (app.hasLogo && app.set.showLogo) { actShowLogo(); delay(2500); }
   else { splash(); delay(1500); }
   app.link = app.set.demo ? LINK_DEMO : LINK_NONE;
@@ -394,6 +542,10 @@ void loop() {
     pollEcu();
     trackStats();
     sampleHistory();
+    if (app.logging && app.ecu.valid && !app.set.demo) {
+      static uint32_t lastLog = 0;
+      if (millis() - lastLog >= 200) { lastLog = millis(); sdLogRow(); }  // ~5 Hz
+    }
     if (!app.needFull && millis() > app.holdUntil) uiUpdate();
   }
 

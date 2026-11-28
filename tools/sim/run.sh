@@ -3,7 +3,7 @@
 set -e
 cd "$(dirname "$0")/../.."
 mkdir -p tools/sim/out
-g++ -std=c++17 -O1 -Itools/sim -Isrc tools/sim/sim_main.cpp src/gfx.cpp src/screens.cpp src/thai_shape.cpp -o tools/sim/out/sim
+g++ -std=c++17 -O1 -Itools/sim -Isrc tools/sim/sim_main.cpp src/gfx.cpp src/screens.cpp src/screens_ecu.cpp src/thai_shape.cpp -o tools/sim/out/sim
 OUT=tools/sim/out tools/sim/out/sim
 python3 - <<'PY'
 from PIL import Image; import glob
