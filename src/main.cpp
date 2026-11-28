@@ -58,6 +58,23 @@ static void loadAll() {
   t.engineSec = prefs.getULong("engSec", 0);
   t.oilSec    = prefs.getULong("oilSec", 0);
   t.starts    = prefs.getULong("starts", 0);
+  app.calDone  = prefs.getBool("calDone", false);
+  app.calHoriz = prefs.getBool("calHor", true);
+  app.calHx0   = prefs.getInt("calHx0", 200);
+  app.calHx1   = prefs.getInt("calHx1", 3700);
+  app.calVy0   = prefs.getInt("calVy0", 240);
+  app.calVy1   = prefs.getInt("calVy1", 3800);
+  prefs.end();
+}
+
+void actSaveCal() {
+  prefs.begin("gauge", false);
+  prefs.putBool("calDone", app.calDone);
+  prefs.putBool("calHor", app.calHoriz);
+  prefs.putInt("calHx0", app.calHx0);
+  prefs.putInt("calHx1", app.calHx1);
+  prefs.putInt("calVy0", app.calVy0);
+  prefs.putInt("calVy1", app.calVy1);
   prefs.end();
 }
 
@@ -473,16 +490,58 @@ static void sampleHistory() {
 // ---------------------------------------------------------------- touch
 static bool getTouch(int &x, int &y) {
   static uint32_t lastMs = 0;
-  int rx, ry;
-  if (!touchGetRaw(rx, ry)) return false;
+  int ra, rb;                         // ra = 0x91 channel, rb = 0xD1 channel
+  if (!touchGetRaw(ra, rb)) return false;
   if (millis() - lastMs < 250) return false;
   lastMs = millis();
-  x = map(rx, 200, 3700, 0, 320);
-  y = map(ry, 240, 3800, 0, 240);
-  if (app.set.flipTouch) { x = 320 - x; y = 240 - y; }
+  if (app.calDone) {
+    int h = app.calHoriz ? ra : rb;   // horizontal-axis channel
+    int v = app.calHoriz ? rb : ra;   // vertical-axis channel
+    x = map(h, app.calHx0, app.calHx1, 16, 303);
+    y = map(v, app.calVy0, app.calVy1, 16, 223);
+  } else {
+    x = map(ra, 200, 3700, 0, 320);   // rough default until calibrated
+    y = map(rb, 240, 3800, 0, 240);
+    if (app.set.flipTouch) { x = 320 - x; y = 240 - y; }
+  }
   x = constrain(x, 0, 319);
   y = constrain(y, 0, 239);
   return true;
+}
+
+// ---- touch calibration: tap 3 corners, derive axis order + scale ----------
+static void computeCal() {
+  int dA = abs(app.calA[1] - app.calA[0]);   // a-channel change TL->TR (horizontal)
+  int dB = abs(app.calB[1] - app.calB[0]);   // b-channel change TL->TR
+  app.calHoriz = (dA >= dB);                 // whichever moves more is horizontal
+  if (app.calHoriz) {
+    app.calHx0 = app.calA[0]; app.calHx1 = app.calA[1];   // a at x=16, x=303
+    app.calVy0 = app.calB[0]; app.calVy1 = app.calB[2];   // b at y=16, y=223
+  } else {
+    app.calHx0 = app.calB[0]; app.calHx1 = app.calB[1];
+    app.calVy0 = app.calA[0]; app.calVy1 = app.calA[2];
+  }
+  if (app.calHx1 == app.calHx0) app.calHx1 += 1;          // guard map() divide-by-zero
+  if (app.calVy1 == app.calVy0) app.calVy1 += 1;
+}
+
+static void handleCalib() {
+  static uint32_t lastTap = 0;
+  int ra, rb;
+  if (!touchGetRaw(ra, rb)) return;
+  if (millis() - lastTap < 600) return;       // debounce between corners
+  lastTap = millis();
+  app.calA[app.calStep] = ra;
+  app.calB[app.calStep] = rb;
+  app.calStep++;
+  if (app.calStep >= 3) {
+    computeCal();
+    app.calDone = true;
+    actSaveCal();
+    app.calStep = 0;
+    app.screen = SCR_SET; app.setTab = 0;
+  }
+  app.needFull = true;                         // draw next crosshair, or the settings page
 }
 
 // ---------------------------------------------------------------- main
@@ -524,6 +583,7 @@ void setup() {
   if (app.hasLogo && app.set.showLogo) { actShowLogo(); delay(2500); }
   else { splash(); delay(1500); }
   app.link = app.set.demo ? LINK_DEMO : LINK_NONE;
+  if (!app.calDone) { app.screen = SCR_CALIB; app.calStep = 0; }   // first run: calibrate touch
   app.needFull = true;
 }
 
@@ -533,6 +593,11 @@ void loop() {
     if (app.needFull) { app.needFull = false; uiDrawFull(); }
     if (server) server->handleClient();
     if (getTouch(x, y) && x > 90 && x < 230 && y > 190) ESP.restart();
+    return;
+  }
+  if (app.screen == SCR_CALIB) {
+    if (app.needFull) { app.needFull = false; uiDrawFull(); }
+    handleCalib();                     // reads raw touch, advances corners
     return;
   }
 

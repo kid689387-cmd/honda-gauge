@@ -463,7 +463,7 @@ static void drawSet() {
     snprintf(b, sizeof(b), "%u", app.set.maxRpm);
     setRow(162, 94, 154, "รอบสูงสุด", b, C_WARN, C_ACCENT);
     setRow(4, 128, 154, "กลับสีจอ", onOff(app.set.invColor), C_WARN, C_ACCENT);
-    setRow(162, 128, 154, "กลับทิศทัช", onOff(app.set.flipTouch), C_WARN, C_ACCENT);
+    setRow(162, 128, 154, "คาลิเบรต", ">", C_ACCENT2, C_PURPLE);
     setRow(4, 162, 312, "ทดสอบสีจอ", ">", C_ACCENT2, C_PURPLE);
   } else if (app.setTab == 1) {
     char m[64];
@@ -620,6 +620,22 @@ static void drawSdFw() {
   button(210, 208, 106, 30, "สแกนใหม่", C_ACCENT);
 }
 
+// ================================================================ touch calib
+static void drawCalib() {
+  tft.fillScreen(C_BG);
+  text("คาลิเบรตทัช", 160, 44, MC_DATUM, C_ACCENT, C_BG, F_THB);
+  text("แตะที่กากบาทให้แม่น", 160, 74, MC_DATUM, C_TEXT, C_BG, F_TH);
+  char b[32]; snprintf(b, sizeof(b), "จุด %d / 3", app.calStep + 1);
+  text(b, 160, 100, MC_DATUM, C_DIM, C_BG, F_TH);
+  const int cx[3] = {16, 303, 16}, cy[3] = {16, 16, 223};
+  int s = app.calStep >= 0 && app.calStep < 3 ? app.calStep : 0;
+  int X = cx[s], Y = cy[s];
+  tft.drawLine(X - 14, Y, X + 14, Y, C_WARN);
+  tft.drawLine(X, Y - 14, X, Y + 14, C_WARN);
+  tft.drawCircle(X, Y, 10, C_ACCENT2);
+  tft.fillCircle(X, Y, 2, C_BAD);
+}
+
 static void touchSdFw(int x, int y) {
   if (hit(x, y, 4, 208, 104, 30)) { app.setTab = 3; app.screen = SCR_SET; app.needFull = true; return; }
   if (hit(x, y, 210, 208, 106, 30)) { actSdListFw(); app.flashArmed = -1; app.needFull = true; return; }
@@ -651,6 +667,7 @@ void uiDrawFull() {
     case SCR_MODEL: drawModel(); break;
     case SCR_ECU: case SCR_ECU_INFO: case SCR_ECU_PAGE: case SCR_ECU_OP: ecuDrawFull(); break;
     case SCR_SDFW:  drawSdFw(); return;
+    case SCR_CALIB: drawCalib(); return;
   }
   uiUpdate();
 }
@@ -730,7 +747,7 @@ void uiTouch(int x, int y) {
         else if (hit(x, y, 4, 94, 154, 32)) { app.set.night = !app.set.night; app.set.bright = app.set.night ? 30 : 100; actApplyBrightness(); }
         else if (hit(x, y, 162, 94, 154, 32)) { app.set.maxRpm = app.set.maxRpm >= 14000 ? 8000 : app.set.maxRpm + 2000; }
         else if (hit(x, y, 4, 128, 154, 32)) { app.set.invColor = !app.set.invColor; actApplyInvert(); }
-        else if (hit(x, y, 162, 128, 154, 32)) app.set.flipTouch = !app.set.flipTouch;
+        else if (hit(x, y, 162, 128, 154, 32)) { app.calStep = 0; go(SCR_CALIB); return; }
         else if (hit(x, y, 4, 162, 312, 32)) { uiColorTest(); app.holdUntil = nowMs() + 3000; }
       } else if (app.setTab == 1) {
         if (hit(x, y, 4, 60, 312, 32)) {

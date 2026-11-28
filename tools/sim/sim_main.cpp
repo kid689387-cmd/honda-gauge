@@ -17,6 +17,7 @@ void actApplyInvert() {}
 void actApplyInvTx() {}
 void actSaveSettings() {}
 void actSaveStats() {}
+void actSaveCal() {}
 void actShowLogo() {}
 void actSdInit() {}
 void actSdLogToggle() {}
@@ -77,5 +78,10 @@ int main() {
   shot(SCR_SDFW, "17_sdfw");
   app.flashArmed = 0; app.flashArmedMs = simNow;
   shot(SCR_SDFW, "17b_sdfw_armed");
+  app.calStep = 0; shot(SCR_CALIB, "18_calib_1");
+  app.calStep = 1; shot(SCR_CALIB, "18_calib_2");
+  app.calStep = 2; shot(SCR_CALIB, "18_calib_3");
+  // show the display tab with the new calibrate entry
+  app.setTab = 0; shot(SCR_SET, "19_set_display");
   return 0;
 }

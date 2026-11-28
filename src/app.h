@@ -3,7 +3,7 @@
 #include <stdint.h>
 
 #define BRAND_NAME "อู่ช่างวัตร ฟรีดอม"
-#define FW_VERSION "0.7.1"
+#define FW_VERSION "0.7.2"
 
 struct EcuData {
   bool     valid = false;
@@ -35,7 +35,8 @@ struct Stats {
 
 enum Screen { SCR_GAUGE, SCR_MENU, SCR_ALL, SCR_CHECK, SCR_DTC, SCR_STATS, SCR_GRAPH, SCR_RAW, SCR_SET, SCR_OTA, SCR_MODEL,
               SCR_ECU, SCR_ECU_INFO, SCR_ECU_PAGE, SCR_ECU_OP,   // SCR_ECU* = ECU TOOL (screens_ecu.cpp)
-              SCR_SDFW };                                        // firmware picker (SD card)
+              SCR_SDFW,                                          // firmware picker (SD card)
+              SCR_CALIB };                                       // touch calibration
 enum Link { LINK_DEMO, LINK_OK, LINK_WAKING, LINK_NONE };
 
 #define HIST_LEN 150
@@ -93,6 +94,14 @@ struct App {
   uint32_t flashArmedMs = 0;
   int      flashPct = -1;             // -1 idle, 0..100 while writing
   char     sdMsg[96] = "";
+  // touch calibration (persisted). calHoriz: is channel-a (0x91) the horizontal axis?
+  bool     calDone = false;
+  bool     calHoriz = true;
+  int      calHx0 = 200, calHx1 = 3700;   // horizontal-channel raw at screen x=16 and x=303
+  int      calVy0 = 240, calVy1 = 3800;   // vertical-channel raw at screen y=16 and y=223
+  int      calStep = 0;                    // which corner we're collecting (0..2), transient
+  int      calA[3] = {0, 0, 0};            // raw a-channel per corner, transient
+  int      calB[3] = {0, 0, 0};            // raw b-channel per corner, transient
 };
 
 extern App app;
@@ -118,6 +127,7 @@ void actApplyInvert();
 void actApplyInvTx();
 void actSaveSettings();
 void actSaveStats();
+void actSaveCal();           // persist the touch calibration
 void actShowLogo();          // draw the uploaded logo full screen
 void actConnectEcu();        // ECU TOOL: wake the ECU and read its ID (read-only)
 // SD card actions (main.cpp, stubbed in the simulator)
